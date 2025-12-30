@@ -7,25 +7,25 @@ import type {
 } from 'n8n-workflow';
 import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
 
-export class Presenta implements INodeType {
+export class Figprint implements INodeType {
     description: INodeTypeDescription = {
-        displayName: 'Presenta',
-        name: 'presenta',
+        displayName: 'Figprint',
+        name: 'figprint',
         group: ['transform'],
         version: 1,
-        description: 'Interact with Presenta API to render documents/images using templates',
+        description: 'Interact with Figprint API to render documents/images using templates',
         icon: { light: 'file:logo.svg', dark: 'file:logo.svg' },
         defaults: {
-            name: 'Presenta',
+            name: 'figprint',
         },
         inputs: [NodeConnectionType.Main],
         outputs: [NodeConnectionType.Main],
         usableAsTool: true,
         credentials: [
             {
-                name: 'presentaApi',
+                name: 'figprintApi',
                 required: true,
-                testedBy: 'PresentaApi',
+                testedBy: 'FigprintApi',
                 displayOptions: {
                     show: {
                         endpoint: ['render', 'cached'],
@@ -179,7 +179,7 @@ export class Presenta implements INodeType {
                 // Get credentials
                 const credentials = await this.getCredentials('presentaApi');
                 if (!credentials || !credentials.token) {
-                    throw new NodeOperationError(this.getNode(), 'No Presenta API token found. Please set PRESENTA_API_TOKEN in your environment.');
+                    throw new NodeOperationError(this.getNode(), 'No Figprint API token found. Please set FIGPRINT_API_TOKEN in your environment.');
                 }
 
                 // Set MIME type based on export format
@@ -324,3 +324,5 @@ export class Presenta implements INodeType {
         return [returnData];
     }
 }
+
+

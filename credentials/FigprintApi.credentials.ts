@@ -1,8 +1,8 @@
 import { ICredentialType, INodeProperties, IHttpRequestMethods } from 'n8n-workflow';
 
-export class PresentaApi implements ICredentialType {
-    name = 'presentaApi';
-    displayName = 'Presenta API';
+export class FigprintApi implements ICredentialType {
+    name = 'figprintApi';
+    displayName = 'Figprint API';
     documentationUrl = 'https://docs.presenta.cc/api.html';
     properties: INodeProperties[] = [
         {
@@ -30,3 +30,6 @@ export class PresentaApi implements ICredentialType {
         },
     };
 }
+
+
+
