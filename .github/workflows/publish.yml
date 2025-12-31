@@ -37,11 +37,12 @@ jobs:
 
       - name: Prepare empty npm config (OIDC only)
         run: |
-          echo "" > "${{ runner.temp }}/empty-npmrc"
+          echo "" > "${{ runner.temp }}/empty-npmrc-user"
+          echo "" > "${{ runner.temp }}/empty-npmrc-global"
       - run: npm test --if-present
       - run: npm publish --provenance --access public
         env:
-          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/empty-npmrc
-          NPM_CONFIG_GLOBALCONFIG: ${{ runner.temp }}/empty-npmrc
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/empty-npmrc-user
+          NPM_CONFIG_GLOBALCONFIG: ${{ runner.temp }}/empty-npmrc-global
           NODE_AUTH_TOKEN: ''
           NPM_TOKEN: ''
