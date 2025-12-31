@@ -163,6 +163,78 @@ Status → Get Config returns JSON.
 
 ## Examples
 
+## Flow diagrams (Mermaid)
+
+### Preview → Export (PDF/PNG/HTML) using `previewId`
+
+```mermaid
+flowchart LR
+	A[Upstream data
+(Set/HTTP/Webhook/etc)] --> B[Figprint
+Resource: Preview
+Operation: Live Preview]
+	B -->|outputs json.previewId| C[Figprint
+Resource: Export
+Operation: Export]
+	C -->|binary.data| D[Next step
+(S3/Email/Glide/etc)]
+
+	B -. optional .-> E[Figprint
+Resource: Preview
+Operation: Get Preview HTML]
+```
+
+### Label generation (no `previewId`)
+
+```mermaid
+flowchart LR
+	A[Upstream data
+(Set/HTTP/Webhook/etc)] --> B[Figprint
+Resource: Label
+Operation: Generate Label]
+	B -->|binary.data (text/plain)| C[Next step
+(Print/Store/Attach)]
+
+	A --> B2[Figprint
+Resource: Export
+Operation: Export (POST)
+Kind: label]
+	B2 -->|binary.data (label text)| C
+```
+
+### Server-side Generate (returns JSON status)
+
+```mermaid
+flowchart LR
+	A[Upstream data
+(Set/HTTP/Webhook/etc)] --> B[Figprint
+Resource: Generate
+Operation: Generate (Single)]
+	A --> C[Figprint
+Resource: Generate
+Operation: Generate Multi]
+
+	B --> D[Downstream logic
+(IF/Switch/Writeback)]
+	C --> D
+```
+
+### Frames dropdown / load options
+
+```mermaid
+sequenceDiagram
+	autonumber
+	participant User as User in n8n editor
+	participant Node as Figprint node UI
+	participant API as Figprint Server API
+
+	User->>Node: Select File Key
+	User->>Node: Open Frame dropdown
+	Node->>API: GET /api/frames?fileKey=...
+	API-->>Node: { frames: [...] }
+	Node-->>User: Dropdown options (name/value)
+```
+
 ### Preview → Export (PDF) using `previewId`
 1) Figprint node: **Resource** = `Preview`, **Operation** = `Live Preview`
 2) Next Figprint node: **Resource** = `Export`, **Operation** = `Export`
@@ -191,6 +263,74 @@ In **Preview → Live Preview**, set **Structured Payload (JSON)**:
 
 ## Roadmap
 Roadmap/backlog is maintained in the repository.
+
+## Ideal API (proposed): single-step `generate` returns a file
+
+Today, PDF/PNG/HTML exports are typically a two-step flow in n8n:
+1) **Preview → Live Preview** (returns `previewId`)
+2) **Export** (downloads the binary)
+
+This works well, but the UX is clunky for common automation cases where you just want:
+**template/fileKey + payload + output kind → binary file**.
+
+### Proposed endpoint
+
+**Goal:** a single endpoint that renders and returns the final artifact (PDF/PNG/HTML/label) in one request.
+
+`POST /api/generate`
+
+#### Request (suggested)
+
+```json
+{
+	"fileKey": "c1hHGLYqSb7WmBynG7sIJd",
+	"frame": "optional-frame-id-or-name",
+
+	"kind": "pdf",
+	"labelFormat": "zpl",
+	"dpi": 203,
+
+	"missing": "keep",
+	"payload": { "...": "merge fields" },
+	"structuredPayload": { "...": "optional structured input" },
+	"pagesSpec": [ { "frameID": "1", "...": "optional per-page overrides" } ]
+}
+```
+
+**Notes**
+- `kind`: `pdf | png | html | label`
+- For `kind=label`, `labelFormat` + `dpi` apply.
+- `payload` should cover the existing merge payload use case.
+- `structuredPayload` and `pagesSpec` mirror what the Preview API already supports.
+
+#### Response (suggested)
+
+- Success returns raw bytes with a correct `Content-Type`:
+	- `application/pdf` for `pdf`
+	- `image/png` for `png`
+	- `text/html; charset=utf-8` for `html`
+	- `text/plain; charset=utf-8` for `label`
+- Optional headers:
+	- `Content-Disposition: attachment; filename="<name>.<ext>"`
+	- `X-Preview-Id: <id>` (useful for debugging/cache hits)
+
+#### Error response (suggested)
+
+Return JSON errors with HTTP status codes:
+
+```json
+{ "error": "BadRequest", "message": "Missing fileKey" }
+```
+
+### How this maps to the current n8n node
+
+With this endpoint available, the n8n node could expose a single operation like:
+**Render (One Step)**
+
+Under the hood it would either:
+- Call the new single-step endpoint directly, or
+- (Fallback) do the current two-step **Preview → Export** flow for older servers.
+
 
 ## License
 MIT
