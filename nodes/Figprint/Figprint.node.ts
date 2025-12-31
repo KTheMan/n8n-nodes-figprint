@@ -43,7 +43,7 @@ export class Figprint implements INodeType {
                     { name: 'Cached', value: 'cached' },
                 ],
                 default: 'render',
-                description: 'Choose the Presenta API endpoint to use',
+                description: 'Choose the Figprint API endpoint to use',
             },
             {
                 displayName: 'Template ID',
@@ -51,14 +51,14 @@ export class Figprint implements INodeType {
                 type: 'string',
                 default: '',
                 required: true,
-                description: 'The Presenta Template ID to use',
+                description: 'The template ID to use',
             },
             {
                 displayName: 'Payload (JSON)',
                 name: 'payload',
                 type: 'json',
                 default: '{}',
-                description: 'Payload to send to Presenta. Supports both simple and structured modes.',
+                description: 'Payload to send. Supports both simple and structured modes.',
             },
             // ...existing code...
             {
@@ -177,9 +177,13 @@ export class Figprint implements INodeType {
                 const f2a_filename = optionsParam.f2a_filename || 'document';
 
                 // Get credentials
-                const credentials = await this.getCredentials('presentaApi');
-                if (!credentials || !credentials.token) {
-                    throw new NodeOperationError(this.getNode(), 'No Figprint API token found. Please set FIGPRINT_API_TOKEN in your environment.');
+                const credentials = await this.getCredentials('figprintApi');
+                const baseUrl = (credentials as { baseUrl?: string } | undefined)?.baseUrl;
+                if (!credentials || !credentials.token || !baseUrl) {
+                    throw new NodeOperationError(
+                        this.getNode(),
+                        'Missing Figprint credentials. Please configure Figprint API credentials (Base URL + API Token).',
+                    );
                 }
 
                 // Set MIME type based on export format
@@ -204,9 +208,10 @@ export class Figprint implements INodeType {
 
                 // Support custom endpoint override
                 const customEndpoint = optionsParam.customEndpoint as string | undefined;
+                const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
                 let url = customEndpoint && customEndpoint.trim() !== ''
                     ? customEndpoint.trim()
-                    : `https://www.presenta.cc/api/${endpoint}/${templateId}`;
+                    : `${normalizedBaseUrl}/api/${endpoint}/${templateId}`;
 
                 let options: any = {
                     method: endpoint === 'render' ? 'POST' : 'GET',

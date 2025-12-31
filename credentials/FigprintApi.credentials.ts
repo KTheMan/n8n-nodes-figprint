@@ -1,10 +1,19 @@
-import { ICredentialType, INodeProperties, IHttpRequestMethods } from 'n8n-workflow';
+import { ICredentialType, INodeProperties } from 'n8n-workflow';
 
 export class FigprintApi implements ICredentialType {
     name = 'figprintApi';
     displayName = 'Figprint API';
-    documentationUrl = 'https://docs.presenta.cc/api.html';
+    documentationUrl = 'https://docs.figprint.cc/api.html';
     properties: INodeProperties[] = [
+        {
+            displayName: 'Base URL',
+            name: 'baseUrl',
+            type: 'string',
+            default: 'https://figprint',
+            placeholder: 'https://figprint',
+            required: true,
+            description: 'Base URL of your Figprint instance (self-hosted).',
+        },
         {
             displayName: 'API Token',
             name: 'token',
@@ -14,21 +23,25 @@ export class FigprintApi implements ICredentialType {
             typeOptions: {
                 password: true,
             },
-            description: 'Your Presenta API token.',
+            description: 'Your Figprint API token.',
         },
     ];
 
-    test = {
-        request: {
-            method: 'POST' as IHttpRequestMethods,
-            url: 'https://www.presenta.cc/api/render/presenta_baed0579-1df4-475f-bfb1-019b45abcac3',
+    authenticate = {
+        type: 'generic',
+        properties: {
             headers: {
                 Authorization: '=Bearer {{$credentials.token}}',
-                'Content-Type': 'application/json',
             },
-            body: '{"frames": [{"frameID": "a"}]}'
         },
-    };
+    } as const;
+
+    test = {
+        request: {
+            baseURL: '={{$credentials.baseUrl}}',
+            url: '/api/status',
+        },
+    } as const;
 }
 
 

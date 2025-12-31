@@ -1,39 +1,69 @@
 
 # n8n-nodes-figprint
 
-This package provides an n8n node for integrating with the [Figprint API](https://docs.Figprint.cc/api.html).
+n8n community node for FigPrint/Figprint rendering.
 
-## Features
-- Render documents and images using Figprint templates
-- Supports `/render` and `/cached` endpoints
-- GUI-first setup for all options except payload
-- Secure credential management via environment variable (`FIGPRINT_API_TOKEN`)
+This repository currently exposes a minimal **template render** integration (two operations: `render` and `cached`) and returns the result as **binary** output.
+
+For a backlog of additional functionality we can implement (based on the upstream FigPrint server API), see: [EPIC.md](EPIC.md).
 
 ## Installation
-Follow the [n8n community node installation guide](https://docs.n8n.io/integrations/community-nodes/installation/).
-
-## Usage
-1. Add the Figprint node to your workflow.
-2. Set your Figprint API token in your environment as `FIGPRINT_API_TOKEN`.
-3. Select the endpoint, template ID, and configure options in the GUI.
-4. Enter your payload as JSON (supports both simple and structured modes).
+Follow the n8n community node installation guide:
+<https://docs.n8n.io/integrations/community-nodes/installation/>
 
 ## Credentials
-Your API token is managed securely via environment variable. No need to store secrets in workflows.
+Create a credential of type **Figprint API** and paste your API token.
 
-## Resources
-- [Figprint API Docs](https://docs.Figprint.cc/api.html)
-- [n8n Docs](https://docs.n8n.io/)
+Notes:
+- This node uses n8n credentials (recommended). It does not require an environment variable.
+- The token is sent as `Authorization: Bearer <token>`.
+
+## Node: Figprint
+
+### Parameters
+
+**Endpoint**
+- `render` (POST)
+- `cached` (GET)
+
+**Template ID**
+- The template identifier used in the request URL.
+
+**Payload (JSON)**
+- JSON object to send.
+- For `render`: sent as the request body.
+- For `cached`: converted into query parameters.
+
+### Options
+
+**Custom Endpoint (Full URL)**
+- If set, the node uses this URL as-is and ignores **Endpoint** and **Template ID**.
+
+**Export File Format**
+- `pdf` | `png` | `jpeg` | `webp`
+- Controls how n8n will label the binary data (filename extension + MIME type).
+
+**Filename**
+- Filename used for the returned binary (defaults to `document`).
+
+**Export Pure PDF**
+- Boolean flag forwarded in the payload as `f2a_exportPurePDF`.
+
+**Cache Buster**
+- Boolean flag forwarded in the payload as `f2a_cacheBuster`.
+
+**Debug Output**
+- When enabled, the node adds a `json.debug` object to the output (request metadata and a generated curl command).
+
+### Output
+The node returns:
+- `binary.data`: the rendered file
+- `json`: empty by default; contains `debug` info when **Debug Output** is enabled
+
+## Roadmap
+See [EPIC.md](EPIC.md) for the full backlog to expand this node toward the upstream FigPrint server API (frames, preview-live, export kinds, labels, fonts, status, etc.).
 
 ## License
 MIT
-
-## More information
-
-Refer to our [documentation on creating nodes](https://docs.n8n.io/integrations/creating-nodes/) for detailed information on building your own nodes.
-
-## License
-
-[MIT](https://github.com/n8n-io/n8n-nodes-starter/blob/master/LICENSE.md)
 
 
