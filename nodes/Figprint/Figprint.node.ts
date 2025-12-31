@@ -39,6 +39,9 @@ export class Figprint implements INodeType {
                     { name: 'Frames', value: 'frames' },
                     { name: 'Preview', value: 'preview' },
                     { name: 'Export', value: 'export' },
+                    { name: 'Label', value: 'label' },
+                    { name: 'Fonts', value: 'fonts' },
+                    { name: 'Status', value: 'status' },
                 ],
                 default: 'frames',
             },
@@ -67,6 +70,7 @@ export class Figprint implements INodeType {
                 },
                 options: [
                     { name: 'Live Preview', value: 'livePreview' },
+                    { name: 'Get Preview HTML', value: 'getHtml' },
                 ],
                 default: 'livePreview',
             },
@@ -84,6 +88,50 @@ export class Figprint implements INodeType {
                     { name: 'PDF (Wrapper)', value: 'pdf' },
                 ],
                 default: 'export',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                displayOptions: {
+                    show: {
+                        resource: ['label'],
+                    },
+                },
+                options: [
+                    { name: 'Generate Label', value: 'generate' },
+                ],
+                default: 'generate',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                displayOptions: {
+                    show: {
+                        resource: ['fonts'],
+                    },
+                },
+                options: [
+                    { name: 'List Fonts', value: 'list' },
+                    { name: 'Font Debug', value: 'debug' },
+                ],
+                default: 'list',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                displayOptions: {
+                    show: {
+                        resource: ['status'],
+                    },
+                },
+                options: [
+                    { name: 'Get Status', value: 'status' },
+                    { name: 'Get Config', value: 'config' },
+                ],
+                default: 'status',
             },
             {
                 displayName: 'File Key',
@@ -174,11 +222,143 @@ export class Figprint implements INodeType {
                 required: true,
                 displayOptions: {
                     show: {
+                        resource: ['preview'],
+                        operation: ['getHtml'],
+                    },
+                },
+                description: 'Preview ID returned by Preview operations (X-Preview-ID)',
+            },
+
+            {
+                displayName: 'Preview ID',
+                name: 'previewId',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
                         resource: ['export'],
                         operation: ['export', 'pdf'],
                     },
                 },
                 description: 'Preview ID returned by Preview operations (X-Preview-ID)',
+            },
+
+            {
+                displayName: 'Label Format',
+                name: 'labelFormat',
+                type: 'options',
+                options: [
+                    { name: 'ZPL', value: 'zpl' },
+                    { name: 'EPL2', value: 'epl2' },
+                ],
+                default: 'zpl',
+                displayOptions: {
+                    show: {
+                        resource: ['label'],
+                        operation: ['generate'],
+                    },
+                },
+            },
+            {
+                displayName: 'File Key',
+                name: 'fileKey',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['label'],
+                        operation: ['generate'],
+                    },
+                },
+                description: 'Figma file key',
+            },
+            {
+                displayName: 'Frame',
+                name: 'frame',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['label'],
+                        operation: ['generate'],
+                    },
+                },
+                description: 'Frame identifier/name to generate the label from',
+            },
+            {
+                displayName: 'DPI',
+                name: 'dpi',
+                type: 'number',
+                default: 203,
+                displayOptions: {
+                    show: {
+                        resource: ['label'],
+                        operation: ['generate'],
+                    },
+                },
+            },
+            {
+                displayName: 'Missing',
+                name: 'missing',
+                type: 'options',
+                options: [
+                    { name: 'Ignore', value: 'ignore' },
+                    { name: 'Empty', value: 'empty' },
+                    { name: 'Error', value: 'error' },
+                ],
+                default: 'ignore',
+                displayOptions: {
+                    show: {
+                        resource: ['label'],
+                        operation: ['generate'],
+                    },
+                },
+                description: 'How the server should handle missing merge fields',
+            },
+            {
+                displayName: 'Merge (JSON)',
+                name: 'mergePayload',
+                type: 'json',
+                default: '{}',
+                displayOptions: {
+                    show: {
+                        resource: ['label'],
+                        operation: ['generate'],
+                    },
+                },
+                description: 'Merge payload object used for label generation',
+            },
+
+            {
+                displayName: 'Frame',
+                name: 'frame',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['fonts'],
+                        operation: ['debug'],
+                    },
+                },
+                description: 'Frame identifier/name',
+            },
+
+            {
+                displayName: 'Diag',
+                name: 'diag',
+                type: 'boolean',
+                default: false,
+                displayOptions: {
+                    show: {
+                        resource: ['status'],
+                        operation: ['status'],
+                    },
+                },
+                description: 'Enable diagnostics in the status response (if supported by server)',
             },
             {
                 displayName: 'Kind',
@@ -328,6 +508,28 @@ export class Figprint implements INodeType {
                     },
                 ],
             },
+
+            {
+                displayName: 'Options',
+                name: 'options',
+                type: 'collection',
+                placeholder: 'Add Option',
+                default: {},
+                displayOptions: {
+                    show: {
+                        resource: ['label', 'fonts', 'status'],
+                    },
+                },
+                options: [
+                    {
+                        displayName: 'X-Figma-Token',
+                        name: 'xFigmaToken',
+                        type: 'string',
+                        default: '',
+                        description: 'Optional: override the Figma token used by the server for this request',
+                    },
+                ],
+            },
         ],
     };
 
@@ -422,6 +624,29 @@ export class Figprint implements INodeType {
                         },
                     });
 
+                } else if (resource === 'preview' && operation === 'getHtml') {
+                    const previewId = this.getNodeParameter('previewId', i) as string;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
+
+                    const html = await figprintApiRequest.call(this, {
+                        method: 'GET',
+                        path: '/api/preview',
+                        qs: {
+                            preview_id: previewId,
+                        },
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'text',
+                    });
+
+                    returnData.push({
+                        json: {
+                            previewId,
+                            html: html as unknown as string,
+                        },
+                    });
+
                 } else if (resource === 'export' && operation === 'export') {
                     const previewId = this.getNodeParameter('previewId', i) as string;
                     const kind = this.getNodeParameter('kind', i) as string;
@@ -509,6 +734,122 @@ export class Figprint implements INodeType {
                             filename: fileName,
                             contentType: contentType || undefined,
                         },
+                    });
+
+                } else if (resource === 'label' && operation === 'generate') {
+                    const labelFormat = this.getNodeParameter('labelFormat', i) as string;
+                    const fileKey = this.getNodeParameter('fileKey', i) as string;
+                    const frame = this.getNodeParameter('frame', i) as string;
+                    const dpi = this.getNodeParameter('dpi', i) as number;
+                    const missing = this.getNodeParameter('missing', i) as string;
+                    const mergePayload = this.getNodeParameter('mergePayload', i, {}) as unknown;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
+
+                    const body: Record<string, unknown> = {
+                        format: labelFormat,
+                        file_key: fileKey,
+                        frame,
+                        dpi,
+                        missing,
+                        merge: mergePayload,
+                    };
+
+                    const labelText = await figprintApiRequest.call(this, {
+                        method: 'POST',
+                        path: '/api/label',
+                        body,
+                        sendJson: true,
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'text',
+                    });
+
+                    const fileName = `label.${labelFormat}.txt`;
+                    const binaryData = await this.helpers.prepareBinaryData(
+                        Buffer.from(String(labelText ?? ''), 'utf8'),
+                        fileName,
+                        'text/plain',
+                    );
+
+                    returnData.push({
+                        binary: { data: binaryData },
+                        json: {
+                            format: labelFormat,
+                            fileKey,
+                            frame,
+                            dpi,
+                            missing,
+                            filename: fileName,
+                        },
+                    });
+
+                } else if (resource === 'fonts' && operation === 'list') {
+                    const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
+                    const response = await figprintApiRequest.call(this, {
+                        method: 'GET',
+                        path: '/api/fonts',
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'json',
+                    });
+
+                    returnData.push({
+                        json: response as unknown as IDataObject,
+                    });
+
+                } else if (resource === 'fonts' && operation === 'debug') {
+                    const frame = this.getNodeParameter('frame', i) as string;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
+                    const response = await figprintApiRequest.call(this, {
+                        method: 'GET',
+                        path: '/api/font-debug',
+                        qs: {
+                            frame,
+                        },
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'json',
+                    });
+
+                    returnData.push({
+                        json: response as unknown as IDataObject,
+                    });
+
+                } else if (resource === 'status' && operation === 'status') {
+                    const diag = this.getNodeParameter('diag', i) as boolean;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
+                    const response = await figprintApiRequest.call(this, {
+                        method: 'GET',
+                        path: '/api/status',
+                        qs: {
+                            diag: diag ? 1 : undefined,
+                        },
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'json',
+                    });
+
+                    returnData.push({
+                        json: response as unknown as IDataObject,
+                    });
+
+                } else if (resource === 'status' && operation === 'config') {
+                    const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
+                    const response = await figprintApiRequest.call(this, {
+                        method: 'GET',
+                        path: '/api/config',
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'json',
+                    });
+
+                    returnData.push({
+                        json: response as unknown as IDataObject,
                     });
                 } else {
                     throw new NodeOperationError(this.getNode(), `The operation "${operation}" on resource "${resource}" is not supported.`);

@@ -24,18 +24,30 @@ Notes:
 - `Frames`
 - `Preview`
 - `Export`
+- `Label`
+- `Fonts`
+- `Status`
 
 **Operation**
 - `List Frames`
 - `Live Preview`
+- `Get Preview HTML`
 - `Export`
 - `PDF (Wrapper)`
+- `Generate Label`
+- `List Fonts`
+- `Font Debug`
+- `Get Status`
+- `Get Config`
 
 **File Key**
 - Figma file key.
 
 **Frame** (Preview only)
 - Optional frame identifier/name.
+
+**Preview ID** (Preview only)
+- Used by Preview → Get Preview HTML.
 
 **Merge Payload (JSON)** (Preview only)
 - Optional object merged into the preview.
@@ -72,12 +84,19 @@ Preview options:
 - **Reverse Order**
 - **Plugin Debug**
 
+Status options:
+- **Diag** (Status → Get Status only)
+
 ### Output
 Frames → List Frames returns JSON.
 
 Preview → Live Preview returns JSON:
 - `json.html`: HTML string returned by the server
 - `json.previewId`: value of the `X-Preview-ID` response header (if present)
+
+Preview → Get Preview HTML returns JSON:
+- `json.previewId`
+- `json.html`
 
 Export → Export returns binary:
 - `binary.data`: the exported file
@@ -86,6 +105,18 @@ Export → Export returns binary:
 Export → PDF (Wrapper) returns binary:
 - `binary.data`: PDF
 - `json.previewId`, `json.filename`, `json.contentType`
+
+Label → Generate Label returns binary:
+- `binary.data`: label text (`text/plain`)
+- `json.format`, `json.fileKey`, `json.frame`, `json.dpi`, `json.missing`, `json.filename`
+
+Fonts → List Fonts returns JSON.
+
+Fonts → Font Debug returns JSON.
+
+Status → Get Status returns JSON.
+
+Status → Get Config returns JSON.
 
 ## Roadmap
 See [EPIC.md](EPIC.md) for the full backlog to expand this node toward the upstream FigPrint server API (frames, preview-live, export kinds, labels, fonts, status, etc.).
