@@ -19,6 +19,11 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Show toolchain versions
+        run: |
+          node -v
+          npm -v
+
       - run: npm ci
       - name: Sync package version to tag
         run: |
@@ -29,5 +34,14 @@ jobs:
             exit 1
           fi
           npm version --no-git-tag-version "$TAG_VERSION"
+
+      - name: Prepare empty npm config (OIDC only)
+        run: |
+          echo "" > "${{ runner.temp }}/empty-npmrc"
       - run: npm test --if-present
-      - run: npm publish
+      - run: npm publish --provenance --access public
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/empty-npmrc
+          NPM_CONFIG_GLOBALCONFIG: ${{ runner.temp }}/empty-npmrc
+          NODE_AUTH_TOKEN: ''
+          NPM_TOKEN: ''
