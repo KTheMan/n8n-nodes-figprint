@@ -21,5 +21,14 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - run: npm ci
+      - name: Sync package version to tag
+        run: |
+          TAG_VERSION='${{ github.ref_name }}'
+          TAG_VERSION=${TAG_VERSION#v}
+          if [ -z "$TAG_VERSION" ]; then
+            echo "No tag version found."
+            exit 1
+          fi
+          npm version --no-git-tag-version "$TAG_VERSION"
       - run: npm test --if-present
-      - run: npm publish --provenance --access public
+      - run: npm publish
