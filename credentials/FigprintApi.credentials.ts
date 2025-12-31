@@ -42,7 +42,7 @@ export class FigprintApi implements ICredentialType {
         type: 'generic',
         properties: {
             headers: {
-                Authorization: '=Bearer {{$credentials.token}}',
+                Authorization: '={{ $credentials.token ? `Bearer ${$credentials.token}` : undefined }}',
             },
         },
     } as const;
