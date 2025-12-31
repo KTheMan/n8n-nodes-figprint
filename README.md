@@ -1,9 +1,7 @@
 
 # n8n-nodes-figprint
 
-n8n community node for FigPrint/Figprint rendering.
-
-This repository currently exposes a minimal **template render** integration (two operations: `render` and `cached`) and returns the result as **binary** output.
+n8n community node for the Figprint Server API.
 
 For a backlog of additional functionality we can implement (based on the upstream FigPrint server API), see: [EPIC.md](EPIC.md).
 
@@ -12,53 +10,82 @@ Follow the n8n community node installation guide:
 <https://docs.n8n.io/integrations/community-nodes/installation/>
 
 ## Credentials
-Create a credential of type **Figprint API** and paste your API token.
+Create a credential of type **Figprint API**.
 
 Notes:
-- This node uses n8n credentials (recommended). It does not require an environment variable.
-- The token is sent as `Authorization: Bearer <token>`.
+- Configure **Base URL** for your Figprint instance (cloud or self-hosted).
+- Configure **API Token** (sent as `Authorization: Bearer <token>`).
 
 ## Node: Figprint
 
 ### Parameters
 
-**Endpoint**
-- `render` (POST)
-- `cached` (GET)
+**Resource**
+- `Frames`
+- `Preview`
+- `Export`
 
-**Template ID**
-- The template identifier used in the request URL.
+**Operation**
+- `List Frames`
+- `Live Preview`
+- `Export`
+- `PDF (Wrapper)`
 
-**Payload (JSON)**
-- JSON object to send.
-- For `render`: sent as the request body.
-- For `cached`: converted into query parameters.
+**File Key**
+- Figma file key.
+
+**Frame** (Preview only)
+- Optional frame identifier/name.
+
+**Merge Payload (JSON)** (Preview only)
+- Optional object merged into the preview.
+
+**Structured Payload (JSON)** (Preview only)
+- Optional structured payload object.
+
+**Pages Spec (JSON)** (Preview only)
+- Optional array describing pages.
+
+**Preview ID** (Export only)
+- Preview ID returned by Preview operations.
+
+**Kind** (Export only)
+- `pdf` | `png` | `html`
+
+**Filename** (Export only)
+- Optional output filename (without extension).
+
+**Backend** (Export only, PDF kind)
+- `weasyprint` | `krilla` (optional)
 
 ### Options
 
-**Custom Endpoint (Full URL)**
-- If set, the node uses this URL as-is and ignores **Endpoint** and **Template ID**.
+**Hard Refresh**
+- Boolean flag to request frames with a hard refresh where supported.
 
-**Export File Format**
-- `pdf` | `png` | `jpeg` | `webp`
-- Controls how n8n will label the binary data (filename extension + MIME type).
+**X-Figma-Token**
+- Optional per-request override for the Figma token (`X-Figma-Token` header).
 
-**Filename**
-- Filename used for the returned binary (defaults to `document`).
-
-**Export Pure PDF**
-- Boolean flag forwarded in the payload as `f2a_exportPurePDF`.
-
-**Cache Buster**
-- Boolean flag forwarded in the payload as `f2a_cacheBuster`.
-
-**Debug Output**
-- When enabled, the node adds a `json.debug` object to the output (request metadata and a generated curl command).
+Preview options:
+- **Mask Text**
+- **Font Debug**
+- **Reverse Order**
+- **Plugin Debug**
 
 ### Output
-The node returns:
-- `binary.data`: the rendered file
-- `json`: empty by default; contains `debug` info when **Debug Output** is enabled
+Frames → List Frames returns JSON.
+
+Preview → Live Preview returns JSON:
+- `json.html`: HTML string returned by the server
+- `json.previewId`: value of the `X-Preview-ID` response header (if present)
+
+Export → Export returns binary:
+- `binary.data`: the exported file
+- `json.kind`, `json.previewId`, `json.filename`, `json.contentType`
+
+Export → PDF (Wrapper) returns binary:
+- `binary.data`: PDF
+- `json.previewId`, `json.filename`, `json.contentType`
 
 ## Roadmap
 See [EPIC.md](EPIC.md) for the full backlog to expand this node toward the upstream FigPrint server API (frames, preview-live, export kinds, labels, fonts, status, etc.).

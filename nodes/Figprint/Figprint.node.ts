@@ -1,11 +1,13 @@
-import { URLSearchParams } from 'url';
 import type {
     IExecuteFunctions,
     INodeExecutionData,
     INodeType,
     INodeTypeDescription,
+    IDataObject,
 } from 'n8n-workflow';
 import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
+
+import { figprintApiRequest } from './GenericFunctions';
 
 export class Figprint implements INodeType {
     description: INodeTypeDescription = {
@@ -13,7 +15,7 @@ export class Figprint implements INodeType {
         name: 'figprint',
         group: ['transform'],
         version: 1,
-        description: 'Interact with Figprint API to render documents/images using templates',
+        description: 'Interact with the Figprint Server API',
         icon: { light: 'file:logo.svg', dark: 'file:logo.svg' },
         defaults: {
             name: 'figprint',
@@ -26,95 +28,303 @@ export class Figprint implements INodeType {
                 name: 'figprintApi',
                 required: true,
                 testedBy: 'FigprintApi',
-                displayOptions: {
-                    show: {
-                        endpoint: ['render', 'cached'],
-                    },
-                },
             },
         ],
         properties: [
             {
-                displayName: 'Endpoint',
-                name: 'endpoint',
+                displayName: 'Resource',
+                name: 'resource',
                 type: 'options',
                 options: [
-                    { name: 'Render', value: 'render' },
-                    { name: 'Cached', value: 'cached' },
+                    { name: 'Frames', value: 'frames' },
+                    { name: 'Preview', value: 'preview' },
+                    { name: 'Export', value: 'export' },
                 ],
-                default: 'render',
-                description: 'Choose the Figprint API endpoint to use',
+                default: 'frames',
             },
             {
-                displayName: 'Template ID',
-                name: 'templateId',
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                displayOptions: {
+                    show: {
+                        resource: ['frames'],
+                    },
+                },
+                options: [
+                    { name: 'List Frames', value: 'list' },
+                ],
+                default: 'list',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                displayOptions: {
+                    show: {
+                        resource: ['preview'],
+                    },
+                },
+                options: [
+                    { name: 'Live Preview', value: 'livePreview' },
+                ],
+                default: 'livePreview',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                    },
+                },
+                options: [
+                    { name: 'Export', value: 'export' },
+                    { name: 'PDF (Wrapper)', value: 'pdf' },
+                ],
+                default: 'export',
+            },
+            {
+                displayName: 'File Key',
+                name: 'fileKey',
                 type: 'string',
                 default: '',
                 required: true,
-                description: 'The template ID to use',
+                displayOptions: {
+                    show: {
+                        resource: ['frames'],
+                        operation: ['list'],
+                    },
+                },
+                description: 'Figma file key',
             },
             {
-                displayName: 'Payload (JSON)',
-                name: 'payload',
+                displayName: 'File Key',
+                name: 'fileKey',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['preview'],
+                        operation: ['livePreview'],
+                    },
+                },
+                description: 'Figma file key',
+            },
+            {
+                displayName: 'Frame',
+                name: 'frame',
+                type: 'string',
+                default: '',
+                displayOptions: {
+                    show: {
+                        resource: ['preview'],
+                        operation: ['livePreview'],
+                    },
+                },
+                description: 'Optional frame identifier/name (if omitted, server default applies)',
+            },
+            {
+                displayName: 'Merge Payload (JSON)',
+                name: 'mergePayload',
                 type: 'json',
                 default: '{}',
-                description: 'Payload to send. Supports both simple and structured modes.',
+                displayOptions: {
+                    show: {
+                        resource: ['preview'],
+                        operation: ['livePreview'],
+                    },
+                },
+                description: 'Optional merge payload object',
             },
-            // ...existing code...
+            {
+                displayName: 'Structured Payload (JSON)',
+                name: 'structuredPayload',
+                type: 'json',
+                default: '{}',
+                displayOptions: {
+                    show: {
+                        resource: ['preview'],
+                        operation: ['livePreview'],
+                    },
+                },
+                description: 'Optional structured payload object',
+            },
+            {
+                displayName: 'Pages Spec (JSON)',
+                name: 'pagesSpec',
+                type: 'json',
+                default: '[]',
+                displayOptions: {
+                    show: {
+                        resource: ['preview'],
+                        operation: ['livePreview'],
+                    },
+                },
+                description: 'Optional pages specification (array)',
+            },
+
+            {
+                displayName: 'Preview ID',
+                name: 'previewId',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['export', 'pdf'],
+                    },
+                },
+                description: 'Preview ID returned by Preview operations (X-Preview-ID)',
+            },
+            {
+                displayName: 'Kind',
+                name: 'kind',
+                type: 'options',
+                options: [
+                    { name: 'PDF', value: 'pdf' },
+                    { name: 'PNG', value: 'png' },
+                    { name: 'HTML', value: 'html' },
+                ],
+                default: 'pdf',
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['export'],
+                    },
+                },
+                description: 'Export kind/plugin',
+            },
+            {
+                displayName: 'Filename',
+                name: 'filename',
+                type: 'string',
+                default: '',
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['export', 'pdf'],
+                    },
+                },
+                description: 'Optional output filename (without extension)',
+            },
+            {
+                displayName: 'Backend',
+                name: 'backend',
+                type: 'options',
+                options: [
+                    { name: 'Default', value: '' },
+                    { name: 'WeasyPrint', value: 'weasyprint' },
+                    { name: 'Krilla', value: 'krilla' },
+                ],
+                default: '',
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['export'],
+                        kind: ['pdf'],
+                    },
+                },
+                description: 'PDF backend selector when supported by the server',
+            },
             {
                 displayName: 'Options',
                 name: 'options',
                 type: 'collection',
                 placeholder: 'Add Option',
                 default: {},
+                displayOptions: {
+                    show: {
+                        resource: ['frames'],
+                        operation: ['list'],
+                    },
+                },
                 options: [
                     {
-                        displayName: 'Cache Buster',
-                        name: 'f2a_cacheBuster',
+                        displayName: 'Hard Refresh',
+                        name: 'hard',
                         type: 'boolean',
-                        default: true,
-                        description: 'Whether to disable cache on template update (for testing)',
+                        default: false,
+                        description: 'Request frames with a hard refresh (bypass any server-side cache where supported)',
                     },
                     {
-                        displayName: 'Custom Endpoint (Full URL)',
-                        name: 'customEndpoint',
+                        displayName: 'X-Figma-Token',
+                        name: 'xFigmaToken',
                         type: 'string',
                         default: '',
-                        description: 'If set, use this as the full request URL (overrides Endpoint and Template ID fields)',
+                        description: 'Optional: override the Figma token used by the server for this request',
                     },
+                ],
+            },
+            {
+                displayName: 'Options',
+                name: 'options',
+                type: 'collection',
+                placeholder: 'Add Option',
+                default: {},
+                displayOptions: {
+                    show: {
+                        resource: ['preview'],
+                        operation: ['livePreview'],
+                    },
+                },
+                options: [
                     {
-                        displayName: 'Debug Output',
-                        name: 'debug',
+                        displayName: 'Mask Text',
+                        name: 'maskText',
                         type: 'boolean',
                         default: false,
-                        description: 'Whether to add debug output to the payload (for troubleshooting)',
                     },
                     {
-                        displayName: 'Export File Format',
-                        name: 'f2a_exportFileFormat',
-                        type: 'options',
-                        options: [
-                            { name: 'PDF', value: 'pdf' },
-                            { name: 'PNG', value: 'png' },
-                            { name: 'JPEG', value: 'jpeg' },
-                            { name: 'WEBP', value: 'webp' },
-                        ],
-                        default: 'pdf',
-                        description: 'Format of the exported file',
-                    },
-                    {
-                        displayName: 'Export Pure PDF',
-                        name: 'f2a_exportPurePDF',
+                        displayName: 'Font Debug',
+                        name: 'fontDebug',
                         type: 'boolean',
                         default: false,
-                        description: 'Whether to preserve vector elements in PDF',
                     },
                     {
-                        displayName: 'Filename',
-                        name: 'f2a_filename',
+                        displayName: 'Reverse Order',
+                        name: 'reverseOrder',
+                        type: 'boolean',
+                        default: false,
+                    },
+                    {
+                        displayName: 'Plugin Debug',
+                        name: 'pluginDebug',
+                        type: 'boolean',
+                        default: false,
+                    },
+                    {
+                        displayName: 'X-Figma-Token',
+                        name: 'xFigmaToken',
                         type: 'string',
-                        default: 'document',
-                        description: 'Name of the returned document',
+                        default: '',
+                        description: 'Optional: override the Figma token used by the server for this request',
+                    },
+                ],
+            },
+
+            {
+                displayName: 'Options',
+                name: 'options',
+                type: 'collection',
+                placeholder: 'Add Option',
+                default: {},
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['export', 'pdf'],
+                    },
+                },
+                options: [
+                    {
+                        displayName: 'X-Figma-Token',
+                        name: 'xFigmaToken',
+                        type: 'string',
+                        default: '',
+                        description: 'Optional: override the Figma token used by the server for this request',
                     },
                 ],
             },
@@ -127,195 +337,181 @@ export class Figprint implements INodeType {
 
         for (let i = 0; i < items.length; i++) {
             try {
-                const endpoint = this.getNodeParameter('endpoint', i) as string;
-                const templateId = this.getNodeParameter('templateId', i) as string;
+                const resource = this.getNodeParameter('resource', i) as string;
+                const operation = this.getNodeParameter('operation', i) as string;
 
-                let payload = this.getNodeParameter('payload', i) as unknown;
-                const optionsParam = this.getNodeParameter('options', i, {}) as {
-                    f2a_exportFileFormat?: string;
-                    f2a_filename?: string;
-                    f2a_exportPurePDF?: boolean;
-                    f2a_cacheBuster?: boolean;
-                    debug?: boolean;
-                    customEndpoint?: string; // Added customEndpoint to optionsParam
-                };
+                if (resource === 'frames' && operation === 'list') {
+                    const fileKey = this.getNodeParameter('fileKey', i) as string;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as {
+                        hard?: boolean;
+                        xFigmaToken?: string;
+                    };
 
-                // Parse payload if it's a string
-                if (typeof payload === 'string') {
-                    try {
-                        payload = JSON.parse(payload);
-                    } catch (err) {
-                        throw new NodeOperationError(this.getNode(), 'Payload is not valid JSON.');
-                    }
-                }
-                if (typeof payload !== 'object' || payload === null) {
-                    throw new NodeOperationError(this.getNode(), 'Payload must be a JSON object.');
-                }
-
-                // Add export fields from options if set (do NOT add debug to payload)
-                let payloadWithExtras: any = { ...payload };
-                if (optionsParam.f2a_exportFileFormat !== undefined) {
-                    payloadWithExtras.f2a_exportFileFormat = optionsParam.f2a_exportFileFormat;
-                }
-                // Only include f2a_filename if set and not empty or default
-                if (
-                    optionsParam.f2a_filename !== undefined &&
-                    optionsParam.f2a_filename !== '' &&
-                    optionsParam.f2a_filename !== 'document'
-                ) {
-                    payloadWithExtras.f2a_filename = optionsParam.f2a_filename;
-                }
-                if (optionsParam.f2a_exportPurePDF !== undefined) {
-                    payloadWithExtras.f2a_exportPurePDF = optionsParam.f2a_exportPurePDF;
-                }
-                if (optionsParam.f2a_cacheBuster !== undefined) {
-                    payloadWithExtras.f2a_cacheBuster = optionsParam.f2a_cacheBuster;
-                }
-
-                // For backward compatibility, set these for file naming and headers
-                const f2a_exportFileFormat = optionsParam.f2a_exportFileFormat || 'pdf';
-                const f2a_filename = optionsParam.f2a_filename || 'document';
-
-                // Get credentials
-                const credentials = await this.getCredentials('figprintApi');
-                const baseUrl = (credentials as { baseUrl?: string } | undefined)?.baseUrl;
-                if (!credentials || !credentials.token || !baseUrl) {
-                    throw new NodeOperationError(
-                        this.getNode(),
-                        'Missing Figprint credentials. Please configure Figprint API credentials (Base URL + API Token).',
-                    );
-                }
-
-                // Set MIME type based on export format
-                let mimeType = 'application/pdf';
-                switch (f2a_exportFileFormat) {
-                    case 'png':
-                        mimeType = 'image/png';
-                        break;
-                    case 'jpeg':
-                        mimeType = 'image/jpeg';
-                        break;
-                    case 'webp':
-                        mimeType = 'image/webp';
-                        break;
-                    case 'pdf':
-                    default:
-                        mimeType = 'application/pdf';
-                        break;
-                }
-
-                // Build request
-
-                // Support custom endpoint override
-                const customEndpoint = optionsParam.customEndpoint as string | undefined;
-                const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
-                let url = customEndpoint && customEndpoint.trim() !== ''
-                    ? customEndpoint.trim()
-                    : `${normalizedBaseUrl}/api/${endpoint}/${templateId}`;
-
-                let options: any = {
-                    method: endpoint === 'render' ? 'POST' : 'GET',
-                    headers: {
-                        Authorization: `Bearer ${credentials.token}`,
-                        Accept: 'application/json,text/html,application/xhtml+xml,application/xml,text/*;q=0.9, image/*;q=0.8, */*;q=0.7',
-                        // 'Content-Type' will be set below only if there is a body
-                    },
-                };
-
-                // Only set Content-Type and body if payloadWithExtras is not empty
-                if (endpoint === 'render') {
-                    if (Object.keys(payloadWithExtras).length > 0) {
-                        options.body = JSON.stringify(payloadWithExtras);
-                        options.headers['Content-Type'] = 'application/json';
-                    }
-                } else if (endpoint === 'cached') {
-                    // For cached, pass payload as query params
-                    const params = new URLSearchParams();
-                    for (const [key, value] of Object.entries(payloadWithExtras)) {
-                        if (typeof value !== 'undefined') {
-                            params.append(key, String(value));
-                        }
-                    }
-                    url += `?${params.toString()}`;
-                };
-
-                // Make HTTP request for binary response
-                const requestDetails = {
-                    url,
-                    ...options,
-                    encoding: null, // Ensure Buffer is returned
-                };
-                const response = await this.helpers.request(requestDetails);
-
-                // Debug: log response type and length
-                const responseType = Object.prototype.toString.call(response);
-                let responseLength: number | undefined = undefined;
-                if (Buffer.isBuffer(response)) {
-                    responseLength = response.length;
-                } else if (response instanceof ArrayBuffer) {
-                    responseLength = response.byteLength;
-                } else if (ArrayBuffer.isView(response)) {
-                    responseLength = response.byteLength;
-                } else if (typeof response === 'string') {
-                    responseLength = response.length;
-                }
-
-                // Ensure response is a Buffer for binary data
-                let responseBuffer: Buffer;
-                if (Buffer.isBuffer(response)) {
-                    responseBuffer = response;
-                } else if (response instanceof ArrayBuffer) {
-                    responseBuffer = Buffer.from(new Uint8Array(response));
-                } else if (ArrayBuffer.isView(response)) {
-                    responseBuffer = Buffer.from(response.buffer, response.byteOffset, response.byteLength);
-                } else {
-                    // Fallback: try to create Buffer (may be string or other type)
-                    responseBuffer = Buffer.from(response);
-                }
-
-                // Prepare binary data for n8n
-                const fileName = f2a_filename || `document.${f2a_exportFileFormat || 'pdf'}`;
-                const binaryData = await this.helpers.prepareBinaryData(
-                    responseBuffer,
-                    fileName,
-                    mimeType
-                );
-
-                if (optionsParam.debug === true) {
-                    // Build a curl command for manual testing
-                    const curlCommand = [
-                        'curl',
-                        '-X', endpoint === 'render' ? 'POST' : 'GET',
-                        `'${url}'`,
-                        '-H', `'Authorization: Bearer ${credentials.token}'`,
-                        '-H', `'Content-Type: application/json'`,
-                        endpoint === 'render' ? `--data-raw '${JSON.stringify(payloadWithExtras)}'` : '',
-                        '-o', `'output.pdf'`
-                    ].filter(Boolean).join(' ');
-                    returnData.push({
-                        binary: {
-                            data: binaryData,
+                    const response = await figprintApiRequest.call(this, {
+                        method: 'GET',
+                        path: '/api/frames',
+                        qs: {
+                            file_key: fileKey,
+                            hard: optionsParam.hard ? 1 : undefined,
                         },
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'json',
+                    });
+
+                    returnData.push({
+                        json: response as unknown as IDataObject,
+                    });
+                } else if (resource === 'preview' && operation === 'livePreview') {
+                    const fileKey = this.getNodeParameter('fileKey', i) as string;
+                    const frame = (this.getNodeParameter('frame', i, '') as string) || '';
+
+                    const mergePayload = this.getNodeParameter('mergePayload', i, {}) as unknown;
+                    const structuredPayload = this.getNodeParameter('structuredPayload', i, {}) as unknown;
+                    const pagesSpec = this.getNodeParameter('pagesSpec', i, []) as unknown;
+
+                    const optionsParam = this.getNodeParameter('options', i, {}) as {
+                        maskText?: boolean;
+                        fontDebug?: boolean;
+                        reverseOrder?: boolean;
+                        pluginDebug?: boolean;
+                        xFigmaToken?: string;
+                    };
+
+                    const body: Record<string, unknown> = {
+                        file_key: fileKey,
+                    };
+
+                    if (frame.trim() !== '') body.frame = frame;
+                    if (mergePayload && typeof mergePayload === 'object' && Object.keys(mergePayload as object).length > 0) {
+                        body.merge = mergePayload;
+                    }
+                    if (structuredPayload && typeof structuredPayload === 'object' && Object.keys(structuredPayload as object).length > 0) {
+                        body.structured = structuredPayload;
+                    }
+                    if (pagesSpec) {
+                        body.pages = pagesSpec;
+                    }
+
+                    if (optionsParam.maskText) body.maskText = true;
+                    if (optionsParam.fontDebug) body.fontDebug = true;
+                    if (optionsParam.reverseOrder) body.reverseOrder = true;
+                    if (optionsParam.pluginDebug) body.pluginDebug = true;
+
+                    const fullResponse = await figprintApiRequest.call(this, {
+                        method: 'POST',
+                        path: '/api/preview-live',
+                        body,
+                        sendJson: true,
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'text',
+                        resolveWithFullResponse: true,
+                    });
+
+                    const responseAny = fullResponse as unknown as { body?: string; headers?: Record<string, string | string[] | undefined> };
+                    const previewIdHeader = responseAny.headers?.['x-preview-id'] ?? responseAny.headers?.['X-Preview-ID'];
+                    const previewId = Array.isArray(previewIdHeader) ? previewIdHeader[0] : previewIdHeader;
+
+                    returnData.push({
                         json: {
-                            debug: {
-                                payload: payloadWithExtras,
-                                request: requestDetails,
-                                responseType,
-                                responseLength,
-                                response: responseBuffer.toString('base64'),
-                                responseFirst100Base64: responseBuffer.slice(0, 100).toString('base64'),
-                                responseFirst100Utf8: responseBuffer.slice(0, 100).toString('utf8'),
-                                curl: curlCommand,
-                            },
+                            previewId: previewId || undefined,
+                            html: responseAny.body ?? '',
+                        },
+                    });
+
+                } else if (resource === 'export' && operation === 'export') {
+                    const previewId = this.getNodeParameter('previewId', i) as string;
+                    const kind = this.getNodeParameter('kind', i) as string;
+                    const backend = this.getNodeParameter('backend', i) as string;
+                    const filenameParam = this.getNodeParameter('filename', i, '') as string;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
+
+                    const fullResponse = await figprintApiRequest.call(this, {
+                        method: 'GET',
+                        path: '/api/export',
+                        qs: {
+                            kind,
+                            preview_id: previewId,
+                            filename: filenameParam.trim() !== '' ? filenameParam.trim() : undefined,
+                            backend: kind === 'pdf' && backend ? backend : undefined,
+                        },
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'binary',
+                        resolveWithFullResponse: true,
+                    });
+
+                    const responseAny = fullResponse as unknown as { body?: Buffer; headers?: Record<string, string | string[] | undefined> };
+                    const contentTypeHeader = responseAny.headers?.['content-type'] ?? responseAny.headers?.['Content-Type'];
+                    const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader;
+
+                    const extByKind: Record<string, string> = { pdf: 'pdf', png: 'png', html: 'html' };
+                    const defaultExt = extByKind[kind] ?? 'bin';
+                    const baseName = filenameParam.trim() !== '' ? filenameParam.trim() : 'export';
+                    const fileName = baseName.includes('.') ? baseName : `${baseName}.${defaultExt}`;
+
+                    const binaryData = await this.helpers.prepareBinaryData(
+                        responseAny.body ?? Buffer.from(''),
+                        fileName,
+                        contentType || (kind === 'pdf' ? 'application/pdf' : kind === 'png' ? 'image/png' : 'text/html'),
+                    );
+
+                    returnData.push({
+                        binary: { data: binaryData },
+                        json: {
+                            kind,
+                            previewId,
+                            filename: fileName,
+                            contentType: contentType || undefined,
+                        },
+                    });
+
+                } else if (resource === 'export' && operation === 'pdf') {
+                    const previewId = this.getNodeParameter('previewId', i) as string;
+                    const filenameParam = this.getNodeParameter('filename', i, '') as string;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
+
+                    const fullResponse = await figprintApiRequest.call(this, {
+                        method: 'GET',
+                        path: '/api/pdf',
+                        qs: {
+                            preview_id: previewId,
+                        },
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'binary',
+                        resolveWithFullResponse: true,
+                    });
+
+                    const responseAny = fullResponse as unknown as { body?: Buffer; headers?: Record<string, string | string[] | undefined> };
+                    const contentTypeHeader = responseAny.headers?.['content-type'] ?? responseAny.headers?.['Content-Type'];
+                    const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader;
+
+                    const baseName = filenameParam.trim() !== '' ? filenameParam.trim() : 'output';
+                    const fileName = baseName.endsWith('.pdf') ? baseName : `${baseName}.pdf`;
+
+                    const binaryData = await this.helpers.prepareBinaryData(
+                        responseAny.body ?? Buffer.from(''),
+                        fileName,
+                        contentType || 'application/pdf',
+                    );
+
+                    returnData.push({
+                        binary: { data: binaryData },
+                        json: {
+                            kind: 'pdf',
+                            previewId,
+                            filename: fileName,
+                            contentType: contentType || undefined,
                         },
                     });
                 } else {
-                    returnData.push({
-                        binary: {
-                            data: binaryData,
-                        },
-                        json: {},
-                    });
+                    throw new NodeOperationError(this.getNode(), `The operation "${operation}" on resource "${resource}" is not supported.`);
                 }
             } catch (error) {
                 if (this.continueOnFail()) {
