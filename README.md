@@ -3,8 +3,6 @@
 
 n8n community node for the Figprint Server API.
 
-For a backlog of additional functionality we can implement (based on the upstream FigPrint server API), see: [EPIC.md](EPIC.md).
-
 ## Installation
 Follow the n8n community node installation guide:
 <https://docs.n8n.io/integrations/community-nodes/installation/>
@@ -192,7 +190,7 @@ In **Preview → Live Preview**, set **Structured Payload (JSON)**:
 ```
 
 ## Roadmap
-See [EPIC.md](EPIC.md) for the full backlog to expand this node toward the upstream FigPrint server API (frames, preview-live, export kinds, labels, fonts, status, etc.).
+Roadmap/backlog is maintained in the repository.
 
 ## License
 MIT
