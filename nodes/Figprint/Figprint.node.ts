@@ -80,6 +80,7 @@ export class Figprint implements INodeType {
                     { name: 'Export', value: 'export' },
                     { name: 'Font', value: 'fonts' },
                     { name: 'Frame', value: 'frames' },
+                    { name: 'Generate', value: 'generate' },
                     { name: 'Label', value: 'label' },
                     { name: 'Preview', value: 'preview' },
                     { name: 'Status', value: 'status' },
@@ -114,7 +115,7 @@ export class Figprint implements INodeType {
                 },
                 options: [
                     { name: 'Live Preview', value: 'livePreview', action: 'Live preview' },
-                    { name: 'Get Preview HTML', value: 'getHtml', action: 'Get preview HTML' },
+                    { name: 'Get Preview HTML', value: 'getHtml', action: 'Get preview html' },
                 ],
                 default: 'livePreview',
             },
@@ -130,9 +131,27 @@ export class Figprint implements INodeType {
                 },
                 options: [
                     { name: 'Export', value: 'export', action: 'Export' },
-                    { name: 'PDF (Wrapper)', value: 'pdf', action: 'Get PDF' },
+                    { name: 'Export (POST)', value: 'exportPost', action: 'Export post' },
+                    { name: 'PDF (Wrapper)', value: 'pdf', action: 'Get pdf' },
                 ],
                 default: 'export',
+            },
+
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: {
+                    show: {
+                        resource: ['generate'],
+                    },
+                },
+                options: [
+                    { name: 'Generate (Single)', value: 'generate', action: 'Generate document' },
+                    { name: 'Generate Multi', value: 'generateMulti', action: 'Generate multi page document' },
+                ],
+                default: 'generate',
             },
             {
                 displayName: 'Operation',
@@ -299,6 +318,22 @@ export class Figprint implements INodeType {
             },
 
             {
+                displayName: 'Preview ID',
+                name: 'previewId',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportPost'],
+                        kind: ['pdf', 'png', 'html'],
+                    },
+                },
+                description: 'Preview ID returned by Preview operations (X-Preview-ID). Required for non-label exports.',
+            },
+
+            {
                 displayName: 'Label Format',
                 name: 'labelFormat',
                 type: 'options',
@@ -391,6 +426,140 @@ export class Figprint implements INodeType {
             },
 
             {
+                displayName: 'Kind',
+                name: 'kind',
+                type: 'options',
+                options: [
+                    { name: 'PDF', value: 'pdf' },
+                    { name: 'PNG', value: 'png' },
+                    { name: 'HTML', value: 'html' },
+                    { name: 'Label', value: 'label' },
+                ],
+                default: 'pdf',
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportPost'],
+                    },
+                },
+                description: 'Export kind/plugin (POST allows a request body; label export supports merge payload)',
+            },
+
+            {
+                displayName: 'Label Format',
+                name: 'labelFormat',
+                type: 'options',
+                options: [
+                    { name: 'ZPL', value: 'zpl' },
+                    { name: 'EPL2', value: 'epl2' },
+                ],
+                default: 'zpl',
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportPost'],
+                        kind: ['label'],
+                    },
+                },
+            },
+
+            {
+                displayName: 'File Key',
+                name: 'fileKey',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportPost'],
+                        kind: ['label'],
+                    },
+                },
+                description: 'Figma file key (required for label export)',
+            },
+            {
+                displayName: 'Frame Name or ID',
+                name: 'frame',
+                type: 'options',
+                typeOptions: {
+                    loadOptionsMethod: 'getFrames',
+                },
+                options: [],
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportPost'],
+                        kind: ['label'],
+                    },
+                },
+                description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
+            },
+            {
+                displayName: 'DPI',
+                name: 'dpi',
+                type: 'number',
+                default: 203,
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportPost'],
+                        kind: ['label'],
+                    },
+                },
+            },
+            {
+                displayName: 'Missing',
+                name: 'missing',
+                type: 'options',
+                options: [
+                    { name: 'Keep', value: 'keep' },
+                    { name: 'Blank', value: 'blank' },
+                    { name: 'Dash', value: 'dash' },
+                ],
+                default: 'keep',
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportPost'],
+                        kind: ['label'],
+                    },
+                },
+                description: 'How the server should handle missing merge fields',
+            },
+            {
+                displayName: 'Merge (JSON)',
+                name: 'mergePayload',
+                type: 'json',
+                default: '{}',
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportPost'],
+                        kind: ['label'],
+                    },
+                },
+                description: 'Merge payload object used for label export',
+            },
+
+            {
+                displayName: 'Export Body (JSON)',
+                name: 'exportBody',
+                type: 'json',
+                default: '{}',
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportPost'],
+                        kind: ['pdf', 'png', 'html'],
+                    },
+                },
+                description: 'Optional JSON body for exporters that accept a POST body (future-proofing). Ignored by most built-in exporters.',
+            },
+
+            {
                 displayName: 'Frame',
                 name: 'frame',
                 type: 'string',
@@ -444,7 +613,7 @@ export class Figprint implements INodeType {
                 displayOptions: {
                     show: {
                         resource: ['export'],
-                        operation: ['export', 'pdf'],
+                        operation: ['export', 'exportPost', 'pdf'],
                     },
                 },
                 description: 'Optional output filename (without extension)',
@@ -462,11 +631,128 @@ export class Figprint implements INodeType {
                 displayOptions: {
                     show: {
                         resource: ['export'],
-                        operation: ['export'],
+                        operation: ['export', 'exportPost'],
                         kind: ['pdf'],
                     },
                 },
                 description: 'PDF backend selector when supported by the server',
+            },
+
+            {
+                displayName: 'File Key',
+                name: 'fileKey',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['generate'],
+                        operation: ['generate', 'generateMulti'],
+                    },
+                },
+                description: 'Figma file key',
+            },
+            {
+                displayName: 'Frame Name or ID',
+                name: 'frame',
+                type: 'options',
+                typeOptions: {
+                    loadOptionsMethod: 'getFrames',
+                },
+                options: [
+                    { name: 'Default', value: '' },
+                ],
+                default: '',
+                displayOptions: {
+                    show: {
+                        resource: ['generate'],
+                        operation: ['generate'],
+                    },
+                },
+                description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
+            },
+            {
+                displayName: 'Payload (JSON)',
+                name: 'payload',
+                type: 'json',
+                default: '{}',
+                displayOptions: {
+                    show: {
+                        resource: ['generate'],
+                        operation: ['generate'],
+                    },
+                },
+                description: 'Optional payload object (single-frame generation)',
+            },
+            {
+                displayName: 'Missing',
+                name: 'missing',
+                type: 'options',
+                options: [
+                    { name: 'Keep', value: 'keep' },
+                    { name: 'Blank', value: 'blank' },
+                    { name: 'Dash', value: 'dash' },
+                ],
+                default: 'keep',
+                displayOptions: {
+                    show: {
+                        resource: ['generate'],
+                        operation: ['generate', 'generateMulti'],
+                    },
+                },
+                description: 'How the server should handle missing merge fields',
+            },
+            {
+                displayName: 'Pages (JSON)',
+                name: 'pages',
+                type: 'json',
+                default: '[]',
+                displayOptions: {
+                    show: {
+                        resource: ['generate'],
+                        operation: ['generateMulti'],
+                    },
+                },
+                description: 'Optional list of frame IDs/names to include',
+            },
+            {
+                displayName: 'Order (JSON)',
+                name: 'order',
+                type: 'json',
+                default: '[]',
+                displayOptions: {
+                    show: {
+                        resource: ['generate'],
+                        operation: ['generateMulti'],
+                    },
+                },
+                description: 'Optional explicit ordering list of frame IDs/names',
+            },
+            {
+                displayName: 'Duplicates (JSON)',
+                name: 'duplicates',
+                type: 'json',
+                default: '[]',
+                displayOptions: {
+                    show: {
+                        resource: ['generate'],
+                        operation: ['generateMulti'],
+                    },
+                },
+                description: 'Optional duplicates directive array (see FigPrint docs)',
+            },
+            {
+                displayName: 'Merge Payloads (JSON)',
+                name: 'mergePayloads',
+                type: 'json',
+                default: '[]',
+                displayOptions: {
+                    show: {
+                        resource: ['generate'],
+                        operation: ['generateMulti'],
+                    },
+                },
+                description: 'Optional list of per-page merge payloads aligned to final pages',
             },
 
             {
@@ -561,7 +847,7 @@ export class Figprint implements INodeType {
                 displayOptions: {
                     show: {
                         resource: ['export'],
-                        operation: ['export', 'pdf'],
+                        operation: ['export', 'exportPost', 'pdf'],
                     },
                 },
                 options: [
@@ -584,7 +870,7 @@ export class Figprint implements INodeType {
                 default: {},
                 displayOptions: {
                     show: {
-                        resource: ['label', 'fonts', 'status'],
+                        resource: ['generate', 'label', 'fonts', 'status'],
                     },
                 },
                 options: [
@@ -793,6 +1079,125 @@ export class Figprint implements INodeType {
                         },
                     });
 
+                } else if (resource === 'export' && operation === 'exportPost') {
+                    const kind = this.getNodeParameter('kind', i) as string;
+                    const backend = this.getNodeParameter('backend', i, '') as string;
+                    const filenameParam = this.getNodeParameter('filename', i, '') as string;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
+
+                    if (kind === 'label') {
+                        const labelFormat = this.getNodeParameter('labelFormat', i) as string;
+                        const fileKey = this.getNodeParameter('fileKey', i) as string;
+                        const frame = this.getNodeParameter('frame', i) as string;
+                        const dpi = this.getNodeParameter('dpi', i) as number;
+                        const missing = this.getNodeParameter('missing', i) as string;
+                        const mergePayload = this.getNodeParameter('mergePayload', i, {}) as unknown;
+
+                        const qs: Record<string, string | number | boolean | undefined> = {
+                            kind,
+                            format: labelFormat,
+                            file_key: fileKey,
+                            frame,
+                            dpi,
+                            missing,
+                            filename: filenameParam.trim() !== '' ? filenameParam.trim() : undefined,
+                        };
+
+                        const body = mergePayload && typeof mergePayload === 'object' ? (mergePayload as Record<string, unknown>) : {};
+
+                        const fullResponse = await figprintApiRequest.call(this, {
+                            method: 'POST',
+                            path: '/api/export',
+                            qs,
+                            body,
+                            sendJson: true,
+                            headers: {
+                                'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                            },
+                            responseType: 'binary',
+                            resolveWithFullResponse: true,
+                        });
+
+                        const responseAny = fullResponse as unknown as { body?: Buffer; headers?: Record<string, string | string[] | undefined> };
+                        const contentTypeHeader = responseAny.headers?.['content-type'] ?? responseAny.headers?.['Content-Type'];
+                        const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader;
+
+                        const defaultExt = labelFormat === 'epl2' ? 'epl' : 'zpl';
+                        const baseName = filenameParam.trim() !== '' ? filenameParam.trim() : 'label';
+                        const fileName = baseName.includes('.') ? baseName : `${baseName}.${defaultExt}`;
+
+                        const binaryData = await this.helpers.prepareBinaryData(
+                            responseAny.body ?? Buffer.from(''),
+                            fileName,
+                            contentType || 'text/plain',
+                        );
+
+                        returnData.push({
+                            binary: { data: binaryData },
+                            json: {
+                                kind,
+                                format: labelFormat,
+                                fileKey,
+                                frame,
+                                dpi,
+                                missing,
+                                filename: fileName,
+                                contentType: contentType || undefined,
+                            },
+                        });
+                    } else {
+                        const previewId = this.getNodeParameter('previewId', i) as string;
+                        const exportBody = this.getNodeParameter('exportBody', i, {}) as unknown;
+
+                        const qs: Record<string, string | number | boolean | undefined> = {
+                            kind,
+                            preview_id: previewId,
+                            filename: filenameParam.trim() !== '' ? filenameParam.trim() : undefined,
+                            backend: kind === 'pdf' && backend ? backend : undefined,
+                        };
+
+                        const bodyObj = exportBody && typeof exportBody === 'object' ? (exportBody as Record<string, unknown>) : {};
+                        const hasBody = bodyObj && Object.keys(bodyObj).length > 0;
+
+                        const fullResponse = await figprintApiRequest.call(this, {
+                            method: 'POST',
+                            path: '/api/export',
+                            qs,
+                            body: hasBody ? bodyObj : undefined,
+                            sendJson: hasBody,
+                            headers: {
+                                'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                            },
+                            responseType: 'binary',
+                            resolveWithFullResponse: true,
+                        });
+
+                        const responseAny = fullResponse as unknown as { body?: Buffer; headers?: Record<string, string | string[] | undefined> };
+                        const contentTypeHeader = responseAny.headers?.['content-type'] ?? responseAny.headers?.['Content-Type'];
+                        const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader;
+
+                        const extByKind: Record<string, string> = { pdf: 'pdf', png: 'png', html: 'html' };
+                        const defaultExt = extByKind[kind] ?? 'bin';
+                        const baseName = filenameParam.trim() !== '' ? filenameParam.trim() : 'export';
+                        const fileName = baseName.includes('.') ? baseName : `${baseName}.${defaultExt}`;
+
+                        const binaryData = await this.helpers.prepareBinaryData(
+                            responseAny.body ?? Buffer.from(''),
+                            fileName,
+                            contentType || (kind === 'pdf' ? 'application/pdf' : kind === 'png' ? 'image/png' : 'text/html'),
+                        );
+
+                        returnData.push({
+                            binary: { data: binaryData },
+                            json: {
+                                kind,
+                                previewId,
+                                filename: fileName,
+                                contentType: contentType || undefined,
+                            },
+                        });
+                    }
+
                 } else if (resource === 'export' && operation === 'pdf') {
                     const previewId = this.getNodeParameter('previewId', i) as string;
                     const filenameParam = this.getNodeParameter('filename', i, '') as string;
@@ -832,6 +1237,71 @@ export class Figprint implements INodeType {
                             filename: fileName,
                             contentType: contentType || undefined,
                         },
+                    });
+
+                } else if (resource === 'generate' && operation === 'generate') {
+                    const fileKey = this.getNodeParameter('fileKey', i) as string;
+                    const frame = (this.getNodeParameter('frame', i, '') as string) || '';
+                    const payload = this.getNodeParameter('payload', i, {}) as unknown;
+                    const missing = this.getNodeParameter('missing', i, 'keep') as string;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
+
+                    const body: Record<string, unknown> = {
+                        fileKey,
+                    };
+                    if (frame.trim() !== '') body.frame = frame;
+                    if (payload && typeof payload === 'object' && Object.keys(payload as object).length > 0) {
+                        body.payload = payload;
+                    }
+                    // Some FigPrint builds accept/use this; harmless if ignored.
+                    if (missing) body.missing = missing;
+
+                    const response = await figprintApiRequest.call(this, {
+                        method: 'POST',
+                        path: '/api/generate',
+                        body,
+                        sendJson: true,
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'json',
+                    });
+
+                    returnData.push({
+                        json: response as unknown as IDataObject,
+                    });
+
+                } else if (resource === 'generate' && operation === 'generateMulti') {
+                    const fileKey = this.getNodeParameter('fileKey', i) as string;
+                    const pages = this.getNodeParameter('pages', i, []) as unknown;
+                    const order = this.getNodeParameter('order', i, []) as unknown;
+                    const duplicates = this.getNodeParameter('duplicates', i, []) as unknown;
+                    const mergePayloads = this.getNodeParameter('mergePayloads', i, []) as unknown;
+                    const missing = this.getNodeParameter('missing', i, 'keep') as string;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
+
+                    const body: Record<string, unknown> = {
+                        fileKey,
+                        missing,
+                    };
+                    if (Array.isArray(pages) && pages.length > 0) body.pages = pages;
+                    if (Array.isArray(order) && order.length > 0) body.order = order;
+                    if (Array.isArray(duplicates) && duplicates.length > 0) body.duplicates = duplicates;
+                    if (Array.isArray(mergePayloads) && mergePayloads.length > 0) body.mergePayloads = mergePayloads;
+
+                    const response = await figprintApiRequest.call(this, {
+                        method: 'POST',
+                        path: '/api/generate-multi',
+                        body,
+                        sendJson: true,
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'json',
+                    });
+
+                    returnData.push({
+                        json: response as unknown as IDataObject,
                     });
 
                 } else if (resource === 'label' && operation === 'generate') {

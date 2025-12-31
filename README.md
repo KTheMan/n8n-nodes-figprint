@@ -13,11 +13,16 @@ Follow the n8n community node installation guide:
 Create a credential of type **Figprint API**.
 
 Notes:
-- Configure **Base URL** for your Figprint instance (cloud or self-hosted).
+- Configure **Base URL** for your Figprint instance (self-hosted or 3rd-party cloud).
 - Configure **API Token** if your server requires it (sent as `Authorization: Bearer <token>`).
 - Optionally set **Default X-Figma-Token** (can be overridden per operation).
 
 ## Node: Figprint
+
+Note on workflow:
+- Use **Generate** operations when you want server-side generation using just a `fileKey` (and optional `frame`). This does **not** require a `previewId`.
+- Use **Preview → Live Preview** when you need a `previewId` for exporter pipelines and (non-label) exports; **Export (GET)** / **PDF (Wrapper)** and **Export (POST)** for `kind=pdf|png|html` require `previewId` on the FigPrint side for multi-tenant isolation.
+- **Label** generation (Label → Generate Label, or Export → Export (POST) with `kind=label`) does not use `previewId`.
 
 ### Parameters
 
@@ -25,6 +30,7 @@ Notes:
 - `Frame`
 - `Preview`
 - `Export`
+- `Generate`
 - `Label`
 - `Font`
 - `Status`
@@ -35,7 +41,10 @@ Notes:
 - `Live Preview`
 - `Get Preview HTML`
 - `Export`
+- `Export (POST)`
 - `PDF (Wrapper)`
+- `Generate (Single)`
+- `Generate Multi`
 - `Generate Label`
 - `List Fonts`
 - `Font Debug`
@@ -45,8 +54,10 @@ Notes:
 **File Key**
 - Figma file key.
 
-**Frame** (Preview only)
-- Optional frame identifier/name.
+**Frame**
+- Frame identifier/name (where applicable).
+	- Used by Preview → Live Preview and Generate → Generate (Single).
+	- Required for Label → Generate Label and Export → Export (POST) when `kind=label`.
 	- If **File Key** is set, the dropdown will populate from Frames → List Frames.
 
 **Preview ID** (Preview only)
@@ -67,11 +78,24 @@ Notes:
 **Kind** (Export only)
 - `pdf` | `png` | `html`
 
+**Kind** (Export → Export (POST))
+- `pdf` | `png` | `html` | `label`
+
 **Filename** (Export only)
 - Optional output filename (without extension).
 
 **Backend** (Export only, PDF kind)
 - `weasyprint` | `krilla` (optional)
+
+**Export Body (JSON)** (Export → Export (POST), non-label kinds)
+- Optional JSON body for exporters that accept a POST body (future-proofing).
+
+**Label inputs** (Export → Export (POST), kind = `label`)
+- Same inputs as Label → Generate Label: `Label Format`, `File Key`, `Frame`, `DPI`, `Missing`, `Merge (JSON)`.
+
+**Generate inputs**
+- Generate (Single): `File Key`, optional `Frame`, `Payload (JSON)`.
+- Generate Multi: `File Key`, optional `Pages (JSON)`, `Order (JSON)`, `Duplicates (JSON)`, `Merge Payloads (JSON)`, `Missing`.
 
 ### TODO (FigPrint)
 
@@ -121,6 +145,16 @@ Label → Generate Label returns binary:
 - `binary.data`: label text (`text/plain`)
 - `json.format`, `json.fileKey`, `json.frame`, `json.dpi`, `json.missing`, `json.filename`
 
+Generate → Generate (Single) returns JSON:
+- `{ status: "ok" }`
+
+Generate → Generate Multi returns JSON:
+- `{ status: "ok" }`
+
+Export → Export (POST) returns binary:
+- For `kind=pdf|png|html`: same shape as Export → Export.
+- For `kind=label`: same shape as Label → Generate Label.
+
 Fonts → List Fonts returns JSON.
 
 Fonts → Font Debug returns JSON.
@@ -141,7 +175,7 @@ Status → Get Config returns JSON.
 In **Preview → Live Preview**, set **Merge Payload (JSON)**:
 ```json
 {
-	"name": "Kenny",
+	"name": "Samuel Pull",
 	"orderId": "12345"
 }
 ```
