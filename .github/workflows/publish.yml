@@ -1,9 +1,8 @@
 name: Publish Package
 
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [ published ]
 
 permissions:
   id-token: write
@@ -23,7 +22,7 @@ jobs:
       - run: npm ci
       - name: Sync package version to tag
         run: |
-          TAG_VERSION='${{ github.ref_name }}'
+          TAG_VERSION='${{ github.event.release.tag_name }}'
           TAG_VERSION=${TAG_VERSION#v}
           if [ -z "$TAG_VERSION" ]; then
             echo "No tag version found."
