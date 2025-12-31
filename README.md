@@ -14,22 +14,24 @@ Create a credential of type **Figprint API**.
 
 Notes:
 - Configure **Base URL** for your Figprint instance (cloud or self-hosted).
-- Configure **API Token** (sent as `Authorization: Bearer <token>`).
+- Configure **API Token** if your server requires it (sent as `Authorization: Bearer <token>`).
+- Optionally set **Default X-Figma-Token** (can be overridden per operation).
 
 ## Node: Figprint
 
 ### Parameters
 
 **Resource**
-- `Frames`
+- `Frame`
 - `Preview`
 - `Export`
 - `Label`
-- `Fonts`
+- `Font`
 - `Status`
 
 **Operation**
 - `List Frames`
+- `Get Starter Payload`
 - `Live Preview`
 - `Get Preview HTML`
 - `Export`
@@ -45,6 +47,7 @@ Notes:
 
 **Frame** (Preview only)
 - Optional frame identifier/name.
+	- If **File Key** is set, the dropdown will populate from Frames → List Frames.
 
 **Preview ID** (Preview only)
 - Used by Preview → Get Preview HTML.
@@ -70,6 +73,10 @@ Notes:
 **Backend** (Export only, PDF kind)
 - `weasyprint` | `krilla` (optional)
 
+### TODO (FigPrint)
+
+To support a dynamic dropdown of available export kinds/plugins in n8n (instead of a fixed list), FigPrint would need to expose this via its API (for example `GET /api/exporters` returning available `kind` values; optionally `GET /api/plugins` for payload/content plugins). Today, `/api/status` only provides capability hints like `render.pngAvailable`.
+
 ### Options
 
 **Hard Refresh**
@@ -89,6 +96,10 @@ Status options:
 
 ### Output
 Frames → List Frames returns JSON.
+
+Frames → Get Starter Payload returns JSON:
+- `json.fileKey`
+- `json.starterPayload`
 
 Preview → Live Preview returns JSON:
 - `json.html`: HTML string returned by the server
@@ -117,6 +128,34 @@ Fonts → Font Debug returns JSON.
 Status → Get Status returns JSON.
 
 Status → Get Config returns JSON.
+
+## Examples
+
+### Preview → Export (PDF) using `previewId`
+1) Figprint node: **Resource** = `Preview`, **Operation** = `Live Preview`
+2) Next Figprint node: **Resource** = `Export`, **Operation** = `Export`
+	 - **Kind** = `pdf`
+	 - **Preview ID** = `{{$json.previewId}}`
+
+### Single-frame merge payload
+In **Preview → Live Preview**, set **Merge Payload (JSON)**:
+```json
+{
+	"name": "Kenny",
+	"orderId": "12345"
+}
+```
+
+### Structured payload example
+In **Preview → Live Preview**, set **Structured Payload (JSON)**:
+```json
+{
+	"page1": {
+		"title": "Hello",
+		"subtitle": "World"
+	}
+}
+```
 
 ## Roadmap
 See [EPIC.md](EPIC.md) for the full backlog to expand this node toward the upstream FigPrint server API (frames, preview-live, export kinds, labels, fonts, status, etc.).

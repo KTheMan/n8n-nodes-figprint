@@ -4,12 +4,52 @@ import type {
     INodeType,
     INodeTypeDescription,
     IDataObject,
+    ILoadOptionsFunctions,
+    INodePropertyOptions,
 } from 'n8n-workflow';
 import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
 
 import { figprintApiRequest } from './GenericFunctions';
 
 export class Figprint implements INodeType {
+    methods = {
+        loadOptions: {
+            async getFrames(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+                const fileKey = (this.getCurrentNodeParameter('fileKey') as string | undefined) ?? '';
+                if (!fileKey || fileKey.trim() === '') {
+                    return [];
+                }
+
+                const optionsParam = (this.getCurrentNodeParameter('options') as { xFigmaToken?: string } | undefined) ?? {};
+                const response = await figprintApiRequest.call(this, {
+                    method: 'GET',
+                    path: '/api/frames',
+                    qs: {
+                        fileKey,
+                    },
+                    headers: {
+                        'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                    },
+                    responseType: 'json',
+                    retry: { maxAttempts: 3 },
+                });
+
+                const framesRaw = (response as unknown as { frames?: Array<{ frameID?: string; id?: string; name?: string }> }).frames ?? [];
+                const frameOptions: INodePropertyOptions[] = [];
+                for (const frame of framesRaw) {
+                    const value = frame.frameID ?? frame.id ?? '';
+                    if (!value) continue;
+                    frameOptions.push({
+                        name: frame.name ?? value,
+                        value,
+                    });
+                }
+
+                return frameOptions;
+            },
+        },
+    };
+
     description: INodeTypeDescription = {
         displayName: 'Figprint',
         name: 'figprint',
@@ -35,12 +75,13 @@ export class Figprint implements INodeType {
                 displayName: 'Resource',
                 name: 'resource',
                 type: 'options',
+                noDataExpression: true,
                 options: [
-                    { name: 'Frames', value: 'frames' },
-                    { name: 'Preview', value: 'preview' },
                     { name: 'Export', value: 'export' },
+                    { name: 'Font', value: 'fonts' },
+                    { name: 'Frame', value: 'frames' },
                     { name: 'Label', value: 'label' },
-                    { name: 'Fonts', value: 'fonts' },
+                    { name: 'Preview', value: 'preview' },
                     { name: 'Status', value: 'status' },
                 ],
                 default: 'frames',
@@ -49,13 +90,15 @@ export class Figprint implements INodeType {
                 displayName: 'Operation',
                 name: 'operation',
                 type: 'options',
+                noDataExpression: true,
                 displayOptions: {
                     show: {
                         resource: ['frames'],
                     },
                 },
                 options: [
-                    { name: 'List Frames', value: 'list' },
+                    { name: 'List Frames', value: 'list', action: 'List frames' },
+                    { name: 'Get Starter Payload', value: 'starterPayload', action: 'Get starter payload' },
                 ],
                 default: 'list',
             },
@@ -63,14 +106,15 @@ export class Figprint implements INodeType {
                 displayName: 'Operation',
                 name: 'operation',
                 type: 'options',
+                noDataExpression: true,
                 displayOptions: {
                     show: {
                         resource: ['preview'],
                     },
                 },
                 options: [
-                    { name: 'Live Preview', value: 'livePreview' },
-                    { name: 'Get Preview HTML', value: 'getHtml' },
+                    { name: 'Live Preview', value: 'livePreview', action: 'Live preview' },
+                    { name: 'Get Preview HTML', value: 'getHtml', action: 'Get preview HTML' },
                 ],
                 default: 'livePreview',
             },
@@ -78,14 +122,15 @@ export class Figprint implements INodeType {
                 displayName: 'Operation',
                 name: 'operation',
                 type: 'options',
+                noDataExpression: true,
                 displayOptions: {
                     show: {
                         resource: ['export'],
                     },
                 },
                 options: [
-                    { name: 'Export', value: 'export' },
-                    { name: 'PDF (Wrapper)', value: 'pdf' },
+                    { name: 'Export', value: 'export', action: 'Export' },
+                    { name: 'PDF (Wrapper)', value: 'pdf', action: 'Get PDF' },
                 ],
                 default: 'export',
             },
@@ -93,13 +138,14 @@ export class Figprint implements INodeType {
                 displayName: 'Operation',
                 name: 'operation',
                 type: 'options',
+                noDataExpression: true,
                 displayOptions: {
                     show: {
                         resource: ['label'],
                     },
                 },
                 options: [
-                    { name: 'Generate Label', value: 'generate' },
+                    { name: 'Generate Label', value: 'generate', action: 'Generate label' },
                 ],
                 default: 'generate',
             },
@@ -107,14 +153,15 @@ export class Figprint implements INodeType {
                 displayName: 'Operation',
                 name: 'operation',
                 type: 'options',
+                noDataExpression: true,
                 displayOptions: {
                     show: {
                         resource: ['fonts'],
                     },
                 },
                 options: [
-                    { name: 'List Fonts', value: 'list' },
-                    { name: 'Font Debug', value: 'debug' },
+                    { name: 'List Fonts', value: 'list', action: 'List fonts' },
+                    { name: 'Font Debug', value: 'debug', action: 'Get font debug' },
                 ],
                 default: 'list',
             },
@@ -122,14 +169,15 @@ export class Figprint implements INodeType {
                 displayName: 'Operation',
                 name: 'operation',
                 type: 'options',
+                noDataExpression: true,
                 displayOptions: {
                     show: {
                         resource: ['status'],
                     },
                 },
                 options: [
-                    { name: 'Get Status', value: 'status' },
-                    { name: 'Get Config', value: 'config' },
+                    { name: 'Get Status', value: 'status', action: 'Get status' },
+                    { name: 'Get Config', value: 'config', action: 'Get config' },
                 ],
                 default: 'status',
             },
@@ -142,7 +190,7 @@ export class Figprint implements INodeType {
                 displayOptions: {
                     show: {
                         resource: ['frames'],
-                        operation: ['list'],
+                        operation: ['list', 'starterPayload'],
                     },
                 },
                 description: 'Figma file key',
@@ -162,9 +210,15 @@ export class Figprint implements INodeType {
                 description: 'Figma file key',
             },
             {
-                displayName: 'Frame',
+                displayName: 'Frame Name or ID',
                 name: 'frame',
-                type: 'string',
+                type: 'options',
+                typeOptions: {
+                    loadOptionsMethod: 'getFrames',
+                },
+                options: [
+                    { name: 'Default', value: '' },
+                ],
                 default: '',
                 displayOptions: {
                     show: {
@@ -172,7 +226,7 @@ export class Figprint implements INodeType {
                         operation: ['livePreview'],
                     },
                 },
-                description: 'Optional frame identifier/name (if omitted, server default applies)',
+                description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
             },
             {
                 displayName: 'Merge Payload (JSON)',
@@ -275,9 +329,13 @@ export class Figprint implements INodeType {
                 description: 'Figma file key',
             },
             {
-                displayName: 'Frame',
+                displayName: 'Frame Name or ID',
                 name: 'frame',
-                type: 'string',
+                type: 'options',
+                typeOptions: {
+                    loadOptionsMethod: 'getFrames',
+                },
+                options: [],
                 default: '',
                 required: true,
                 displayOptions: {
@@ -286,7 +344,7 @@ export class Figprint implements INodeType {
                         operation: ['generate'],
                     },
                 },
-                description: 'Frame identifier/name to generate the label from',
+                description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
             },
             {
                 displayName: 'DPI',
@@ -305,11 +363,11 @@ export class Figprint implements INodeType {
                 name: 'missing',
                 type: 'options',
                 options: [
-                    { name: 'Ignore', value: 'ignore' },
-                    { name: 'Empty', value: 'empty' },
-                    { name: 'Error', value: 'error' },
+                    { name: 'Keep', value: 'keep' },
+                    { name: 'Blank', value: 'blank' },
+                    { name: 'Dash', value: 'dash' },
                 ],
-                default: 'ignore',
+                default: 'keep',
                 displayOptions: {
                     show: {
                         resource: ['label'],
@@ -358,7 +416,7 @@ export class Figprint implements INodeType {
                         operation: ['status'],
                     },
                 },
-                description: 'Enable diagnostics in the status response (if supported by server)',
+                description: 'Whether to enable diagnostics in the status response (if supported by server)',
             },
             {
                 displayName: 'Kind',
@@ -410,6 +468,7 @@ export class Figprint implements INodeType {
                 },
                 description: 'PDF backend selector when supported by the server',
             },
+
             {
                 displayName: 'Options',
                 name: 'options',
@@ -419,7 +478,7 @@ export class Figprint implements INodeType {
                 displayOptions: {
                     show: {
                         resource: ['frames'],
-                        operation: ['list'],
+                        operation: ['list', 'starterPayload'],
                     },
                 },
                 options: [
@@ -428,17 +487,19 @@ export class Figprint implements INodeType {
                         name: 'hard',
                         type: 'boolean',
                         default: false,
-                        description: 'Request frames with a hard refresh (bypass any server-side cache where supported)',
+                        description: 'Whether to request frames with a hard refresh (bypass any server-side cache where supported)',
                     },
                     {
                         displayName: 'X-Figma-Token',
                         name: 'xFigmaToken',
                         type: 'string',
+                        typeOptions: { password: true },
                         default: '',
                         description: 'Optional: override the Figma token used by the server for this request',
                     },
                 ],
             },
+
             {
                 displayName: 'Options',
                 name: 'options',
@@ -453,33 +514,38 @@ export class Figprint implements INodeType {
                 },
                 options: [
                     {
-                        displayName: 'Mask Text',
-                        name: 'maskText',
-                        type: 'boolean',
-                        default: false,
-                    },
-                    {
                         displayName: 'Font Debug',
                         name: 'fontDebug',
                         type: 'boolean',
                         default: false,
+                        description: 'Whether to enable font debugging in the preview response',
                     },
                     {
-                        displayName: 'Reverse Order',
-                        name: 'reverseOrder',
+                        displayName: 'Mask Text',
+                        name: 'maskText',
                         type: 'boolean',
                         default: false,
+                        description: 'Whether to mask text in the preview output',
                     },
                     {
                         displayName: 'Plugin Debug',
                         name: 'pluginDebug',
                         type: 'boolean',
                         default: false,
+                        description: 'Whether to enable plugin debugging in the preview response',
+                    },
+                    {
+                        displayName: 'Reverse Order',
+                        name: 'reverseOrder',
+                        type: 'boolean',
+                        default: false,
+                        description: 'Whether to reverse the render order of preview pages',
                     },
                     {
                         displayName: 'X-Figma-Token',
                         name: 'xFigmaToken',
                         type: 'string',
+                        typeOptions: { password: true },
                         default: '',
                         description: 'Optional: override the Figma token used by the server for this request',
                     },
@@ -503,6 +569,7 @@ export class Figprint implements INodeType {
                         displayName: 'X-Figma-Token',
                         name: 'xFigmaToken',
                         type: 'string',
+                        typeOptions: { password: true },
                         default: '',
                         description: 'Optional: override the Figma token used by the server for this request',
                     },
@@ -525,6 +592,7 @@ export class Figprint implements INodeType {
                         displayName: 'X-Figma-Token',
                         name: 'xFigmaToken',
                         type: 'string',
+                        typeOptions: { password: true },
                         default: '',
                         description: 'Optional: override the Figma token used by the server for this request',
                     },
@@ -553,7 +621,7 @@ export class Figprint implements INodeType {
                         method: 'GET',
                         path: '/api/frames',
                         qs: {
-                            file_key: fileKey,
+                            fileKey,
                             hard: optionsParam.hard ? 1 : undefined,
                         },
                         headers: {
@@ -564,6 +632,36 @@ export class Figprint implements INodeType {
 
                     returnData.push({
                         json: response as unknown as IDataObject,
+                    });
+
+                } else if (resource === 'frames' && operation === 'starterPayload') {
+                    const fileKey = this.getNodeParameter('fileKey', i) as string;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as {
+                        hard?: boolean;
+                        xFigmaToken?: string;
+                    };
+
+                    const response = await figprintApiRequest.call(this, {
+                        method: 'GET',
+                        path: '/api/frames',
+                        qs: {
+                            fileKey,
+                            hard: optionsParam.hard ? 1 : undefined,
+                        },
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'json',
+                        retry: { maxAttempts: 3 },
+                    });
+
+                    const starterPayload = (response as unknown as { starterPayload?: unknown }).starterPayload ?? {};
+
+                    returnData.push({
+                        json: {
+                            fileKey,
+                            starterPayload,
+                        },
                     });
                 } else if (resource === 'preview' && operation === 'livePreview') {
                     const fileKey = this.getNodeParameter('fileKey', i) as string;
@@ -582,24 +680,24 @@ export class Figprint implements INodeType {
                     };
 
                     const body: Record<string, unknown> = {
-                        file_key: fileKey,
+                        fileKey,
                     };
 
                     if (frame.trim() !== '') body.frame = frame;
                     if (mergePayload && typeof mergePayload === 'object' && Object.keys(mergePayload as object).length > 0) {
-                        body.merge = mergePayload;
+                        body.mergePayload = mergePayload;
                     }
                     if (structuredPayload && typeof structuredPayload === 'object' && Object.keys(structuredPayload as object).length > 0) {
-                        body.structured = structuredPayload;
+                        body.structuredPayload = structuredPayload;
                     }
                     if (pagesSpec) {
-                        body.pages = pagesSpec;
+                        body.pagesSpec = pagesSpec;
                     }
 
-                    if (optionsParam.maskText) body.maskText = true;
-                    if (optionsParam.fontDebug) body.fontDebug = true;
+                    if (optionsParam.maskText) body.maskText = 1;
+                    if (optionsParam.fontDebug) body.fontDebug = 1;
                     if (optionsParam.reverseOrder) body.reverseOrder = true;
-                    if (optionsParam.pluginDebug) body.pluginDebug = true;
+                    if (optionsParam.pluginDebug) body.pluginDebug = 1;
 
                     const fullResponse = await figprintApiRequest.call(this, {
                         method: 'POST',
@@ -745,18 +843,20 @@ export class Figprint implements INodeType {
                     const mergePayload = this.getNodeParameter('mergePayload', i, {}) as unknown;
                     const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
 
-                    const body: Record<string, unknown> = {
+                    const qs: Record<string, string | number | boolean | undefined> = {
                         format: labelFormat,
                         file_key: fileKey,
                         frame,
                         dpi,
                         missing,
-                        merge: mergePayload,
                     };
+
+                    const body = mergePayload && typeof mergePayload === 'object' ? (mergePayload as Record<string, unknown>) : {};
 
                     const labelText = await figprintApiRequest.call(this, {
                         method: 'POST',
                         path: '/api/label',
+                        qs,
                         body,
                         sendJson: true,
                         headers: {

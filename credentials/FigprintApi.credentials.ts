@@ -9,21 +9,32 @@ export class FigprintApi implements ICredentialType {
             displayName: 'Base URL',
             name: 'baseUrl',
             type: 'string',
-            default: 'https://figprint',
-            placeholder: 'https://figprint',
+            default: 'http://localhost:8000',
+            placeholder: 'http://localhost:8000',
             required: true,
-            description: 'Base URL of your Figprint instance (self-hosted).',
+            description: 'Base URL of your Figprint instance (cloud or self-hosted).',
         },
         {
             displayName: 'API Token',
             name: 'token',
             type: 'string',
             default: '',
-            required: true,
+            required: false,
             typeOptions: {
                 password: true,
             },
-            description: 'Your Figprint API token.',
+            description: 'Optional: Figprint API token (Bearer). Leave empty only if your server allows anonymous access.',
+        },
+        {
+            displayName: 'Default X-Figma-Token',
+            name: 'xFigmaToken',
+            type: 'string',
+            default: '',
+            required: false,
+            typeOptions: {
+                password: true,
+            },
+            description: 'Optional: default Figma token sent as X-Figma-Token (can be overridden per operation).',
         },
     ];
 
