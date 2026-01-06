@@ -19,7 +19,8 @@ Notes:
 
 Note on workflow:
 - Use **Generate** operations when you want server-side generation using just a `fileKey` (and optional `frame`). This does **not** require a `previewId`.
-- Use **Preview → Live Preview** when you need a `previewId` for exporter pipelines and (non-label) exports; **Export (GET)** / **PDF (Wrapper)** and **Export (POST)** for `kind=pdf|png|html` require `previewId` on the FigPrint side for multi-tenant isolation.
+- Use **Preview → Live Preview** when you want a `previewId` (e.g. to reuse a preview across multiple exports). The **Export** operation uses `previewId`.
+- Use **Export → Export From File Key (Quick)** when you want a one-shot export directly from `fileKey` (no `previewId` required). The node calls `/api/export` with `file_key` (GET for simple exports; POST when a JSON body is needed).
 - **Label** generation (Label → Generate Label, or Export → Export (POST) with `kind=label`) does not use `previewId`.
 
 ### Parameters
@@ -38,6 +39,7 @@ Note on workflow:
 - `Get Starter Payload`
 - `Live Preview`
 - `Get Preview HTML`
+- `Export From File Key (Quick)`
 - `Export`
 - `Export (POST)`
 - `PDF (Wrapper)`
@@ -164,6 +166,20 @@ Status → Get Config returns JSON.
 ## Examples
 
 ## Flow diagrams (Mermaid)
+
+### One-step export from `fileKey` (recommended)
+
+Use Export → **Export From File Key (Quick)** when you just want a file output (PDF/PNG/HTML) and don't want to manage `previewId` yourself. The node exports directly from `fileKey`, and will automatically switch to `POST /api/export` when you provide a merge payload or advanced request body.
+
+```mermaid
+flowchart LR
+	A[Upstream data
+(Set/HTTP/Webhook/etc)] --> B[Figprint
+Resource: Export
+Operation: Export From File Key (Quick)]
+	B -->|binary.data| C[Next step
+(S3/Email/Drive/etc)]
+```
 
 ### Preview → Export (PDF/PNG/HTML) using `previewId`
 

@@ -1,40 +1,239 @@
-import type { INodeTypeBaseDescription } from 'n8n-workflow';
-import { VersionedNodeType } from 'n8n-workflow';
+import type {
+    IDataObject,
+    IExecuteFunctions,
+    ILoadOptionsFunctions,
+    INodeExecutionData,
+    INodePropertyOptions,
+    INodeType,
+    INodeTypeDescription,
+} from 'n8n-workflow';
+import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
 
-import { FigprintV1 } from './v1/FigprintV1.node';
-import { FigprintV2 } from './v2/FigprintV2.node';
+import { figprintApiRequest } from '../GenericFunctions';
 
-export class Figprint extends VersionedNodeType {
-    constructor() {
-        const baseDescription: INodeTypeBaseDescription = {
-            displayName: 'Figprint',
-            name: 'figprint',
-            icon: { light: 'file:logo.svg', dark: 'file:logo.svg' },
-            group: ['transform'],
-            description: 'Interact with the Figprint Server API',
-            defaultVersion: 2,
-            usableAsTool: true,
-        };
+export class FigprintV1 implements INodeType {
+    methods = {
+        loadOptions: {
+            async getFrames(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+                const fileKey = (this.getCurrentNodeParameter('fileKey') as string | undefined) ?? '';
+                if (!fileKey || fileKey.trim() === '') {
+                    return [];
+                }
 
-        super(
-            {
-                1: new FigprintV1(),
-                2: new FigprintV2(),
+                const optionsParam = (this.getCurrentNodeParameter('options') as { xFigmaToken?: string } | undefined) ?? {};
+                const response = await figprintApiRequest.call(this, {
+                    method: 'GET',
+                    path: '/api/frames',
+                    qs: {
+                        fileKey,
+                    },
+                    headers: {
+                        'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                    },
+                    responseType: 'json',
+                    retry: { maxAttempts: 3 },
+                });
+
+                const framesRaw = (response as unknown as { frames?: Array<{ frameID?: string; id?: string; name?: string }> }).frames ?? [];
+                const frameOptions: INodePropertyOptions[] = [];
+                for (const frame of framesRaw) {
+                    const value = frame.frameID ?? frame.id ?? '';
+                    if (!value) continue;
+                    frameOptions.push({
+                        name: frame.name ?? value,
+                        value,
+                    });
+                }
+
+                return frameOptions;
             },
-            baseDescription,
-        );
-    }
-}
+        },
+    };
 
-/*
+    description: INodeTypeDescription = {
+        displayName: 'Figprint',
+        name: 'figprint',
+        group: ['transform'],
+        version: 1,
+        description: 'Interact with the Figprint Server API',
+        icon: { light: 'file:logo.svg', dark: 'file:logo.svg' },
+        defaults: {
+            name: 'figprint',
+        },
+        inputs: [NodeConnectionType.Main],
+        outputs: [NodeConnectionType.Main],
+        usableAsTool: true,
+        credentials: [
+            {
+                name: 'figprintApi',
+                required: true,
+                testedBy: 'FigprintApi',
+            },
+        ],
+        properties: [
+            {
+                displayName: 'Resource',
+                name: 'resource',
+                type: 'options',
+                noDataExpression: true,
+                options: [
+                    { name: 'Export', value: 'export' },
+                    { name: 'Font', value: 'fonts' },
+                    { name: 'Frame', value: 'frames' },
+                    { name: 'Generate', value: 'generate' },
+                    { name: 'Label', value: 'label' },
+                    { name: 'Preview', value: 'preview' },
+                    { name: 'Status', value: 'status' },
+                ],
+                default: 'frames',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: {
+                    show: {
+                        resource: ['frames'],
+                    },
+                },
+                options: [
                     { name: 'List Frames', value: 'list', action: 'List frames' },
                     { name: 'Get Starter Payload', value: 'starterPayload', action: 'Get starter payload' },
                 ],
                 default: 'list',
             },
             {
-                    { name: 'Default', value: '' },
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: {
+                    show: {
+                        resource: ['preview'],
+                    },
+                },
+                options: [
+                    { name: 'Live Preview', value: 'livePreview', action: 'Live preview' },
+                    { name: 'Get Preview HTML', value: 'getHtml', action: 'Get preview html' },
                 ],
+                default: 'livePreview',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                    },
+                },
+                options: [
+                    { name: 'Export From File Key (Quick)', value: 'exportFromFileKey', action: 'Export from file key' },
+                    { name: 'Export', value: 'export', action: 'Export' },
+                    { name: 'Export (POST)', value: 'exportPost', action: 'Export post' },
+                    { name: 'PDF (Wrapper)', value: 'pdf', action: 'Get pdf' },
+                ],
+                default: 'exportFromFileKey',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: {
+                    show: {
+                        resource: ['generate'],
+                    },
+                },
+                options: [
+                    { name: 'Generate (Single)', value: 'generate', action: 'Generate document' },
+                    { name: 'Generate Multi', value: 'generateMulti', action: 'Generate multi page document' },
+                ],
+                default: 'generate',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: {
+                    show: {
+                        resource: ['label'],
+                    },
+                },
+                options: [{ name: 'Generate Label', value: 'generate', action: 'Generate label' }],
+                default: 'generate',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: {
+                    show: {
+                        resource: ['fonts'],
+                    },
+                },
+                options: [
+                    { name: 'List Fonts', value: 'list', action: 'List fonts' },
+                    { name: 'Font Debug', value: 'debug', action: 'Get font debug' },
+                ],
+                default: 'list',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: {
+                    show: {
+                        resource: ['status'],
+                    },
+                },
+                options: [
+                    { name: 'Get Status', value: 'status', action: 'Get status' },
+                    { name: 'Get Config', value: 'config', action: 'Get config' },
+                ],
+                default: 'status',
+            },
+            {
+                displayName: 'File Key',
+                name: 'fileKey',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['frames'],
+                        operation: ['list', 'starterPayload'],
+                    },
+                },
+                description: 'Figma file key',
+            },
+            {
+                displayName: 'File Key',
+                name: 'fileKey',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['preview'],
+                        operation: ['livePreview'],
+                    },
+                },
+                description: 'Figma file key',
+            },
+            {
+                displayName: 'Frame Name or ID',
+                name: 'frame',
+                type: 'options',
+                typeOptions: {
+                    loadOptionsMethod: 'getFrames',
+                },
+                options: [{ name: 'Default', value: '' }],
                 default: '',
                 displayOptions: {
                     show: {
@@ -42,7 +241,8 @@ export class Figprint extends VersionedNodeType {
                         operation: ['livePreview'],
                     },
                 },
-                description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
+                description:
+                    'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
             },
             {
                 displayName: 'Merge Payload (JSON)',
@@ -83,7 +283,6 @@ export class Figprint extends VersionedNodeType {
                 },
                 description: 'Optional pages specification (array)',
             },
-
             {
                 displayName: 'Preview ID',
                 name: 'previewId',
@@ -98,7 +297,6 @@ export class Figprint extends VersionedNodeType {
                 },
                 description: 'Preview ID returned by Preview operations (X-Preview-ID)',
             },
-
             {
                 displayName: 'Preview ID',
                 name: 'previewId',
@@ -113,7 +311,6 @@ export class Figprint extends VersionedNodeType {
                 },
                 description: 'Preview ID returned by Preview operations (X-Preview-ID)',
             },
-
             {
                 displayName: 'Preview ID',
                 name: 'previewId',
@@ -129,7 +326,6 @@ export class Figprint extends VersionedNodeType {
                 },
                 description: 'Preview ID returned by Preview operations (X-Preview-ID). Required for non-label exports.',
             },
-
             {
                 displayName: 'Label Format',
                 name: 'labelFormat',
@@ -176,7 +372,8 @@ export class Figprint extends VersionedNodeType {
                         operation: ['generate'],
                     },
                 },
-                description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
+                description:
+                    'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
             },
             {
                 displayName: 'DPI',
@@ -221,7 +418,6 @@ export class Figprint extends VersionedNodeType {
                 },
                 description: 'Merge payload object used for label generation',
             },
-
             {
                 displayName: 'Kind',
                 name: 'kind',
@@ -241,7 +437,6 @@ export class Figprint extends VersionedNodeType {
                 },
                 description: 'Export kind/plugin (POST allows a request body; label export supports merge payload)',
             },
-
             {
                 displayName: 'Label Format',
                 name: 'labelFormat',
@@ -259,7 +454,6 @@ export class Figprint extends VersionedNodeType {
                     },
                 },
             },
-
             {
                 displayName: 'File Key',
                 name: 'fileKey',
@@ -292,7 +486,8 @@ export class Figprint extends VersionedNodeType {
                         kind: ['label'],
                     },
                 },
-                description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
+                description:
+                    'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
             },
             {
                 displayName: 'DPI',
@@ -340,7 +535,6 @@ export class Figprint extends VersionedNodeType {
                 },
                 description: 'Merge payload object used for label export',
             },
-
             {
                 displayName: 'Export Body (JSON)',
                 name: 'exportBody',
@@ -353,9 +547,9 @@ export class Figprint extends VersionedNodeType {
                         kind: ['pdf', 'png', 'html'],
                     },
                 },
-                description: 'Optional JSON body for exporters that accept a POST body (future-proofing). Ignored by most built-in exporters.',
+                description:
+                    'Optional JSON body for exporters that accept a POST body (future-proofing). Ignored by most built-in exporters.',
             },
-
             {
                 displayName: 'Frame',
                 name: 'frame',
@@ -370,7 +564,6 @@ export class Figprint extends VersionedNodeType {
                 },
                 description: 'Frame identifier/name',
             },
-
             {
                 displayName: 'Diag',
                 name: 'diag',
@@ -434,7 +627,6 @@ export class Figprint extends VersionedNodeType {
                 },
                 description: 'PDF backend selector when supported by the server',
             },
-
             {
                 displayName: 'File Key',
                 name: 'fileKey',
@@ -449,7 +641,6 @@ export class Figprint extends VersionedNodeType {
                 },
                 description: 'Figma file key',
             },
-
             {
                 displayName: 'Additional Fields',
                 name: 'additionalFields',
@@ -480,7 +671,8 @@ export class Figprint extends VersionedNodeType {
                         name: 'exportBody',
                         type: 'json',
                         default: '{}',
-                        description: 'Optional raw JSON body for POST /api/export. If the body does not include fileKey/file_key, the node will send file_key in the query string.',
+                        description:
+                            'Optional raw JSON body for POST /api/export. If the body does not include fileKey/file_key, the node will send file_key in the query string.',
                     },
                     {
                         displayName: 'Font Debug',
@@ -496,11 +688,10 @@ export class Figprint extends VersionedNodeType {
                         typeOptions: {
                             loadOptionsMethod: 'getFrames',
                         },
-                        options: [
-                            { name: 'Default', value: '' },
-                        ],
+                        options: [{ name: 'Default', value: '' }],
                         default: '',
-                        description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
+                        description:
+                            'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
                     },
                     {
                         displayName: 'Global Merge (JSON)',
@@ -521,7 +712,8 @@ export class Figprint extends VersionedNodeType {
                         name: 'mergePayload',
                         type: 'json',
                         default: '{}',
-                        description: 'Optional merge payload object used for one-shot exports (single frame) or preview-live shaped requests',
+                        description:
+                            'Optional merge payload object used for one-shot exports (single frame) or preview-live shaped requests',
                     },
                     {
                         displayName: 'Missing Strategy',
@@ -554,18 +746,17 @@ export class Figprint extends VersionedNodeType {
                         name: 'reverseOrder',
                         type: 'boolean',
                         default: false,
-                        description: 'Whether to reverse the render order of pages in the request',
+                        description: 'Whether to reverse the render order of pages',
                     },
                     {
                         displayName: 'Structured Payload (JSON)',
                         name: 'structuredPayload',
                         type: 'json',
                         default: '{}',
-                        description: 'Optional structured payload object for multi-page composition',
+                        description: 'Optional structured payload object used for one-shot exports',
                     },
                 ],
             },
-
             {
                 displayName: 'File Key',
                 name: 'fileKey',
@@ -587,9 +778,7 @@ export class Figprint extends VersionedNodeType {
                 typeOptions: {
                     loadOptionsMethod: 'getFrames',
                 },
-                options: [
-                    { name: 'Default', value: '' },
-                ],
+                options: [{ name: 'Default', value: '' }],
                 default: '',
                 displayOptions: {
                     show: {
@@ -597,7 +786,8 @@ export class Figprint extends VersionedNodeType {
                         operation: ['generate'],
                     },
                 },
-                description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
+                description:
+                    'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
             },
             {
                 displayName: 'Payload (JSON)',
@@ -610,10 +800,10 @@ export class Figprint extends VersionedNodeType {
                         operation: ['generate'],
                     },
                 },
-                description: 'Optional payload object (single-frame generation)',
+                description: 'Optional payload object',
             },
             {
-                displayName: 'Missing',
+                displayName: 'Missing Strategy',
                 name: 'missing',
                 type: 'options',
                 options: [
@@ -628,7 +818,7 @@ export class Figprint extends VersionedNodeType {
                         operation: ['generate', 'generateMulti'],
                     },
                 },
-                description: 'How the server should handle missing merge fields',
+                description: 'How to handle missing merge keys',
             },
             {
                 displayName: 'Pages (JSON)',
@@ -682,7 +872,6 @@ export class Figprint extends VersionedNodeType {
                 },
                 description: 'Optional list of per-page merge payloads aligned to final pages',
             },
-
             {
                 displayName: 'Options',
                 name: 'options',
@@ -713,7 +902,6 @@ export class Figprint extends VersionedNodeType {
                     },
                 ],
             },
-
             {
                 displayName: 'Options',
                 name: 'options',
@@ -765,7 +953,6 @@ export class Figprint extends VersionedNodeType {
                     },
                 ],
             },
-
             {
                 displayName: 'Options',
                 name: 'options',
@@ -789,7 +976,6 @@ export class Figprint extends VersionedNodeType {
                     },
                 ],
             },
-
             {
                 displayName: 'Options',
                 name: 'options',
@@ -847,7 +1033,6 @@ export class Figprint extends VersionedNodeType {
                     returnData.push({
                         json: response as unknown as IDataObject,
                     });
-
                 } else if (resource === 'frames' && operation === 'starterPayload') {
                     const fileKey = this.getNodeParameter('fileKey', i) as string;
                     const optionsParam = this.getNodeParameter('options', i, {}) as {
@@ -935,7 +1120,6 @@ export class Figprint extends VersionedNodeType {
                             html: responseAny.body ?? '',
                         },
                     });
-
                 } else if (resource === 'preview' && operation === 'getHtml') {
                     const previewId = this.getNodeParameter('previewId', i) as string;
                     const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
@@ -958,7 +1142,6 @@ export class Figprint extends VersionedNodeType {
                             html: html as unknown as string,
                         },
                     });
-
                 } else if (resource === 'export' && operation === 'export') {
                     const previewId = this.getNodeParameter('previewId', i) as string;
                     const kind = this.getNodeParameter('kind', i) as string;
@@ -1006,7 +1189,6 @@ export class Figprint extends VersionedNodeType {
                             contentType: contentType || undefined,
                         },
                     });
-
                 } else if (resource === 'export' && operation === 'exportFromFileKey') {
                     const fileKey = this.getNodeParameter('fileKey', i) as string;
                     const kind = this.getNodeParameter('kind', i) as string;
@@ -1075,9 +1257,20 @@ export class Figprint extends VersionedNodeType {
                     const hasPreviewLikeBody = Object.keys(previewLikeBody).length > 1;
 
                     const bodyIsPreviewLike = hasExportBody
-                        ? ['fileKey', 'file_key', 'frame', 'mergePayload', 'pagesSpec', 'structuredPayload', 'globalMerge', 'missing', 'reverseOrder', 'maskText', 'fontDebug', 'pluginDebug'].some(
-                                (k) => k in exportBodyObj,
-                          )
+                        ? [
+                                'fileKey',
+                                'file_key',
+                                'frame',
+                                'mergePayload',
+                                'pagesSpec',
+                                'structuredPayload',
+                                'globalMerge',
+                                'missing',
+                                'reverseOrder',
+                                'maskText',
+                                'fontDebug',
+                                'pluginDebug',
+                          ].some((k) => k in exportBodyObj)
                         : false;
 
                     const requestMethod: 'GET' | 'POST' = hasExportBody || hasPreviewLikeBody ? 'POST' : 'GET';
@@ -1097,8 +1290,6 @@ export class Figprint extends VersionedNodeType {
                         sendJson = true;
 
                         if (hasExportBody) {
-                            // If the body looks like a preview-live request, ensure it includes fileKey.
-                            // Otherwise, treat it as a merge-payload object and pass file_key in query.
                             if (bodyIsPreviewLike) {
                                 if (!('fileKey' in exportBodyObj) && !('file_key' in exportBodyObj)) {
                                     exportBodyObj.fileKey = fileKey;
@@ -1110,7 +1301,6 @@ export class Figprint extends VersionedNodeType {
                                 body = exportBodyObj;
                             }
                         } else {
-                            // Use preview-live-like shape for one-shot exports with advanced inputs.
                             body = previewLikeBody;
                         }
                     }
@@ -1148,7 +1338,6 @@ export class Figprint extends VersionedNodeType {
                             contentType: contentType || undefined,
                         },
                     });
-
                 } else if (resource === 'export' && operation === 'exportPost') {
                     const kind = this.getNodeParameter('kind', i) as string;
                     const backend = this.getNodeParameter('backend', i, '') as string;
@@ -1267,7 +1456,6 @@ export class Figprint extends VersionedNodeType {
                             },
                         });
                     }
-
                 } else if (resource === 'export' && operation === 'pdf') {
                     const previewId = this.getNodeParameter('previewId', i) as string;
                     const filenameParam = this.getNodeParameter('filename', i, '') as string;
@@ -1308,7 +1496,6 @@ export class Figprint extends VersionedNodeType {
                             contentType: contentType || undefined,
                         },
                     });
-
                 } else if (resource === 'generate' && operation === 'generate') {
                     const fileKey = this.getNodeParameter('fileKey', i) as string;
                     const frame = (this.getNodeParameter('frame', i, '') as string) || '';
@@ -1323,7 +1510,6 @@ export class Figprint extends VersionedNodeType {
                     if (payload && typeof payload === 'object' && Object.keys(payload as object).length > 0) {
                         body.payload = payload;
                     }
-                    // Some FigPrint builds accept/use this; harmless if ignored.
                     if (missing) body.missing = missing;
 
                     const response = await figprintApiRequest.call(this, {
@@ -1340,7 +1526,6 @@ export class Figprint extends VersionedNodeType {
                     returnData.push({
                         json: response as unknown as IDataObject,
                     });
-
                 } else if (resource === 'generate' && operation === 'generateMulti') {
                     const fileKey = this.getNodeParameter('fileKey', i) as string;
                     const pages = this.getNodeParameter('pages', i, []) as unknown;
@@ -1373,7 +1558,6 @@ export class Figprint extends VersionedNodeType {
                     returnData.push({
                         json: response as unknown as IDataObject,
                     });
-
                 } else if (resource === 'label' && operation === 'generate') {
                     const labelFormat = this.getNodeParameter('labelFormat', i) as string;
                     const fileKey = this.getNodeParameter('fileKey', i) as string;
@@ -1406,11 +1590,7 @@ export class Figprint extends VersionedNodeType {
                     });
 
                     const fileName = `label.${labelFormat}.txt`;
-                    const binaryData = await this.helpers.prepareBinaryData(
-                        Buffer.from(String(labelText ?? ''), 'utf8'),
-                        fileName,
-                        'text/plain',
-                    );
+                    const binaryData = await this.helpers.prepareBinaryData(Buffer.from(String(labelText ?? ''), 'utf8'), fileName, 'text/plain');
 
                     returnData.push({
                         binary: { data: binaryData },
@@ -1423,7 +1603,6 @@ export class Figprint extends VersionedNodeType {
                             filename: fileName,
                         },
                     });
-
                 } else if (resource === 'fonts' && operation === 'list') {
                     const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
                     const response = await figprintApiRequest.call(this, {
@@ -1438,7 +1617,6 @@ export class Figprint extends VersionedNodeType {
                     returnData.push({
                         json: response as unknown as IDataObject,
                     });
-
                 } else if (resource === 'fonts' && operation === 'debug') {
                     const frame = this.getNodeParameter('frame', i) as string;
                     const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
@@ -1457,7 +1635,6 @@ export class Figprint extends VersionedNodeType {
                     returnData.push({
                         json: response as unknown as IDataObject,
                     });
-
                 } else if (resource === 'status' && operation === 'status') {
                     const diag = this.getNodeParameter('diag', i) as boolean;
                     const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
@@ -1476,7 +1653,6 @@ export class Figprint extends VersionedNodeType {
                     returnData.push({
                         json: response as unknown as IDataObject,
                     });
-
                 } else if (resource === 'status' && operation === 'config') {
                     const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
                     const response = await figprintApiRequest.call(this, {
@@ -1496,7 +1672,7 @@ export class Figprint extends VersionedNodeType {
                 }
             } catch (error) {
                 if (this.continueOnFail()) {
-                    returnData.push({ json: { error: error.message } });
+                    returnData.push({ json: { error: (error as Error).message } });
                 } else {
                     throw new NodeOperationError(this.getNode(), error);
                 }
@@ -1506,7 +1682,3 @@ export class Figprint extends VersionedNodeType {
         return [returnData];
     }
 }
-
-*/
-
-
