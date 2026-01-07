@@ -1,28 +1,484 @@
-import type { INodeTypeBaseDescription } from 'n8n-workflow';
-import { VersionedNodeType } from 'n8n-workflow';
+import type {
+    IDataObject,
+    IExecuteFunctions,
+    ILoadOptionsFunctions,
+    INodeExecutionData,
+    INodePropertyOptions,
+    INodeType,
+    INodeTypeDescription,
+} from 'n8n-workflow';
+import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
 
-import { FigprintV1 } from './v1/FigprintV1.node';
-import { FigprintV2 } from './v2/FigprintV2.node';
+import { figprintApiRequest } from './GenericFunctions';
 
-export class Figprint extends VersionedNodeType {
-    constructor() {
-        const baseDescription: INodeTypeBaseDescription = {
-            displayName: 'Figprint',
-            name: 'figprint',
-            icon: { light: 'file:logo.svg', dark: 'file:logo.svg' },
-            group: ['transform'],
-            description: 'Interact with the Figprint Server API',
-            defaultVersion: 2,
-            usableAsTool: true,
-        };
+export class Figprint implements INodeType {
+    methods = {
+        loadOptions: {
+            async getFrames(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+                const fileKey = (this.getCurrentNodeParameter('fileKey') as string | undefined) ?? '';
+                if (!fileKey || fileKey.trim() === '') {
+                    return [];
+                }
 
-        super(
-            {
-                1: new FigprintV1(),
-                2: new FigprintV2(),
+                const optionsParam = (this.getCurrentNodeParameter('options') as { xFigmaToken?: string } | undefined) ?? {};
+                const response = await figprintApiRequest.call(this, {
+                    method: 'GET',
+                    path: '/api/frames',
+                    qs: {
+                        fileKey,
+                    },
+                    headers: {
+                        'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                    },
+                    responseType: 'json',
+                    retry: { maxAttempts: 3 },
+                });
+
+                const framesRaw = (response as unknown as { frames?: Array<{ frameID?: string; id?: string; name?: string }> }).frames ?? [];
+                const frameOptions: INodePropertyOptions[] = [];
+                for (const frame of framesRaw) {
+                    const value = frame.frameID ?? frame.id ?? '';
+                    if (!value) continue;
+                    frameOptions.push({
+                        name: frame.name ?? value,
+                        value,
+                    });
+                }
+
+                return frameOptions;
             },
-            baseDescription,
-        );
+        },
+    };
+
+    description: INodeTypeDescription = {
+        displayName: 'Figprint',
+        name: 'figprint',
+        group: ['transform'],
+        version: 1,
+        description: 'Render exports from FigPrint',
+        icon: { light: 'file:logo.svg', dark: 'file:logo.svg' },
+        defaults: {
+            name: 'figprint',
+        },
+        inputs: [NodeConnectionType.Main],
+        outputs: [NodeConnectionType.Main],
+        usableAsTool: true,
+        credentials: [
+            {
+                name: 'figprintApi',
+                required: true,
+                testedBy: 'FigprintApi',
+            },
+        ],
+        properties: [
+            {
+                displayName: 'Resource',
+                name: 'resource',
+                type: 'options',
+                noDataExpression: true,
+                options: [
+                    { name: 'Render', value: 'export' },
+                    { name: 'Frame', value: 'frame' },
+                ],
+                default: 'export',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                    },
+                },
+                options: [{ name: 'Render From File Key', value: 'exportFromFileKey', action: 'Render from file key' }],
+                default: 'exportFromFileKey',
+            },
+            {
+                displayName: 'Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: {
+                    show: {
+                        resource: ['frame'],
+                    },
+                },
+                options: [
+                    { name: 'List Frames', value: 'list', action: 'List frames' },
+                    { name: 'Get Starter Payload', value: 'starterPayload', action: 'Get starter payload' },
+                ],
+                default: 'list',
+            },
+            {
+                displayName: 'File Key',
+                name: 'fileKey',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportFromFileKey'],
+                    },
+                },
+                description: 'Figma file key',
+            },
+            {
+                displayName: 'File Key',
+                name: 'fileKey',
+                type: 'string',
+                default: '',
+                required: true,
+                displayOptions: {
+                    show: {
+                        resource: ['frame'],
+                        operation: ['list', 'starterPayload'],
+                    },
+                },
+                description: 'Figma file key',
+            },
+            {
+                displayName: 'Kind',
+                name: 'kind',
+                type: 'options',
+                options: [
+                    { name: 'PDF', value: 'pdf' },
+                    { name: 'PNG', value: 'png' },
+                    { name: 'HTML', value: 'html' },
+                ],
+                default: 'pdf',
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportFromFileKey'],
+                    },
+                },
+                description: 'Output format',
+            },
+            {
+                displayName: 'Filename',
+                name: 'filename',
+                type: 'string',
+                default: '',
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportFromFileKey'],
+                    },
+                },
+                description: 'Optional output filename (without extension)',
+            },
+            {
+                displayName: 'Payload (JSON)',
+                name: 'payload',
+                type: 'json',
+                default: '{}',
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportFromFileKey'],
+                    },
+                },
+                description: 'Optional payload object passed to /api/export',
+            },
+            {
+                displayName: 'Additional Fields',
+                name: 'additionalFields',
+                type: 'collection',
+                placeholder: 'Add Field',
+                default: {},
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportFromFileKey'],
+                    },
+                },
+                options: [
+                    {
+                        displayName: 'Backend',
+                        name: 'backend',
+                        type: 'options',
+                        options: [
+                            { name: 'Default', value: '' },
+                            { name: 'WeasyPrint', value: 'weasyprint' },
+                            { name: 'Krilla', value: 'krilla' },
+                        ],
+                        default: '',
+                        description: 'PDF backend selector (only used for PDF exports)',
+                    },
+                    {
+                        displayName: 'Frame Name or ID',
+                        name: 'frame',
+                        type: 'options',
+                        typeOptions: {
+                            loadOptionsMethod: 'getFrames',
+                        },
+                        options: [{ name: 'Default', value: '' }],
+                        default: '',
+                        description:
+                            'Optional: render a single frame. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+                    },
+                    {
+                        displayName: 'Missing Strategy',
+                        name: 'missing',
+                        type: 'options',
+                        options: [
+                            { name: 'Keep', value: 'keep' },
+                            { name: 'Blank', value: 'blank' },
+                            { name: 'Dash', value: 'dash' },
+                        ],
+                        default: 'keep',
+                        description: 'How to handle missing merge keys',
+                    },
+                ],
+            },
+            {
+                displayName: 'Options',
+                name: 'options',
+                type: 'collection',
+                placeholder: 'Add Option',
+                default: {},
+                displayOptions: {
+                    show: {
+                        resource: ['export'],
+                        operation: ['exportFromFileKey'],
+                    },
+                },
+                options: [
+                    {
+                        displayName: 'X-Figma-Token',
+                        name: 'xFigmaToken',
+                        type: 'string',
+                        typeOptions: { password: true },
+                        default: '',
+                        description: 'Optional: override the Figma token used by the server for this request',
+                    },
+                ],
+            },
+            {
+                displayName: 'Options',
+                name: 'options',
+                type: 'collection',
+                placeholder: 'Add Option',
+                default: {},
+                displayOptions: {
+                    show: {
+                        resource: ['frame'],
+                        operation: ['list', 'starterPayload'],
+                    },
+                },
+                options: [
+                    {
+                        displayName: 'Hard Refresh',
+                        name: 'hard',
+                        type: 'boolean',
+                        default: false,
+                        description: 'Whether to request frames with a hard refresh (bypass any server-side cache where supported)',
+                    },
+                    {
+                        displayName: 'X-Figma-Token',
+                        name: 'xFigmaToken',
+                        type: 'string',
+                        typeOptions: { password: true },
+                        default: '',
+                        description: 'Optional: override the Figma token used by the server for this request',
+                    },
+                ],
+            },
+        ],
+    };
+
+    async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+        const items = this.getInputData();
+        const returnData: INodeExecutionData[] = [];
+
+        for (let i = 0; i < items.length; i++) {
+            try {
+                const resource = this.getNodeParameter('resource', i) as string;
+                const operation = this.getNodeParameter('operation', i) as string;
+
+                if (resource === 'frame' && operation === 'list') {
+                    const fileKey = this.getNodeParameter('fileKey', i) as string;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as {
+                        hard?: boolean;
+                        xFigmaToken?: string;
+                    };
+
+                    const response = await figprintApiRequest.call(this, {
+                        method: 'GET',
+                        path: '/api/frames',
+                        qs: {
+                            fileKey,
+                            hard: optionsParam.hard ? 1 : undefined,
+                        },
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'json',
+                    });
+
+                    returnData.push({
+                        json: response as unknown as IDataObject,
+                    });
+                } else if (resource === 'frame' && operation === 'starterPayload') {
+                    const fileKey = this.getNodeParameter('fileKey', i) as string;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as {
+                        hard?: boolean;
+                        xFigmaToken?: string;
+                    };
+
+                    const response = await figprintApiRequest.call(this, {
+                        method: 'GET',
+                        path: '/api/frames',
+                        qs: {
+                            fileKey,
+                            hard: optionsParam.hard ? 1 : undefined,
+                        },
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'json',
+                        retry: { maxAttempts: 3 },
+                    });
+
+                    const starterPayload = (response as unknown as { starterPayload?: unknown }).starterPayload ?? {};
+
+                    returnData.push({
+                        json: {
+                            fileKey,
+                            starterPayload,
+                        },
+                    });
+                } else if (resource === 'export' && operation === 'exportFromFileKey') {
+                    const fileKey = this.getNodeParameter('fileKey', i) as string;
+                    const kind = this.getNodeParameter('kind', i) as string;
+                    const filenameParam = this.getNodeParameter('filename', i, '') as string;
+                    const payloadParam = this.getNodeParameter('payload', i, {}) as unknown;
+                    const optionsParam = this.getNodeParameter('options', i, {}) as { xFigmaToken?: string };
+                    const additionalFields = this.getNodeParameter('additionalFields', i, {}) as {
+                        backend?: string;
+                        frame?: string;
+                        missing?: 'keep' | 'blank' | 'dash';
+                    };
+
+                    const extByKind: Record<string, string> = { pdf: 'pdf', png: 'png', html: 'html' };
+                    const defaultExt = extByKind[kind] ?? 'bin';
+                    const baseName = filenameParam.trim() !== '' ? filenameParam.trim() : 'export';
+                    const fileName = baseName.includes('.') ? baseName : `${baseName}.${defaultExt}`;
+
+                    const frame = (additionalFields.frame ?? '').toString().trim();
+                    const backend = (additionalFields.backend ?? '').toString().trim();
+                    const missing = (additionalFields.missing ?? 'keep').toString().trim();
+
+                    if (payloadParam !== null && typeof payloadParam !== 'object') {
+                        throw new NodeOperationError(this.getNode(), 'Payload (JSON) must be an object');
+                    }
+                    if (Array.isArray(payloadParam)) {
+                        throw new NodeOperationError(this.getNode(), 'Payload (JSON) must be an object, not an array');
+                    }
+
+                    const payloadObj = (payloadParam ?? {}) as Record<string, unknown>;
+                    const hasPayload = Object.keys(payloadObj).length > 0;
+                    const bodyIsPreviewLike = hasPayload
+                        ? [
+                                'fileKey',
+                                'file_key',
+                                'frame',
+                                'mergePayload',
+                                'pagesSpec',
+                                'structuredPayload',
+                                'globalMerge',
+                                'missing',
+                          ].some((k) => k in payloadObj)
+                        : false;
+
+                    const requestMethod: 'GET' | 'POST' = hasPayload || (missing && missing !== 'keep') ? 'POST' : 'GET';
+
+                    const qs: Record<string, string | number | boolean | undefined> = {
+                        kind,
+                        filename: fileName,
+                        backend: kind === 'pdf' && backend ? backend : undefined,
+                        frame: requestMethod === 'GET' && frame ? frame : undefined,
+                        file_key: requestMethod === 'GET' ? fileKey : undefined,
+                    };
+
+                    let body: Record<string, unknown> | undefined;
+                    let sendJson = false;
+
+                    if (requestMethod === 'POST') {
+                        sendJson = true;
+
+                        if (hasPayload) {
+                            body = { ...payloadObj };
+                            if (bodyIsPreviewLike) {
+                                if (!('fileKey' in body) && !('file_key' in body)) {
+                                    body.fileKey = fileKey;
+                                }
+                                if (frame && !('frame' in body)) {
+                                    body.frame = frame;
+                                }
+                                if (missing && missing !== 'keep' && !('missing' in body)) {
+                                    body.missing = missing;
+                                }
+                            } else {
+                                qs.file_key = fileKey;
+                                if (frame) qs.frame = frame;
+                            }
+                        } else {
+                            body = { fileKey };
+                            if (missing && missing !== 'keep') body.missing = missing;
+                            if (frame) body.frame = frame;
+                        }
+                    }
+
+                    const exportFullResponse = await figprintApiRequest.call(this, {
+                        method: requestMethod,
+                        path: '/api/export',
+                        qs,
+                        body,
+                        sendJson,
+                        headers: {
+                            'X-Figma-Token': optionsParam.xFigmaToken?.trim() || undefined,
+                        },
+                        responseType: 'binary',
+                        resolveWithFullResponse: true,
+                    });
+
+                    const exportAny = exportFullResponse as unknown as { body?: Buffer; headers?: Record<string, string | string[] | undefined> };
+                    const contentTypeHeader = exportAny.headers?.['content-type'] ?? exportAny.headers?.['Content-Type'];
+                    const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader;
+
+                    const binaryData = await this.helpers.prepareBinaryData(
+                        exportAny.body ?? Buffer.from(''),
+                        fileName,
+                        contentType || (kind === 'pdf' ? 'application/pdf' : kind === 'png' ? 'image/png' : 'text/html'),
+                    );
+
+                    returnData.push({
+                        binary: { data: binaryData },
+                        json: {
+                            kind,
+                            fileKey,
+                            frame: frame.trim() !== '' ? frame.trim() : undefined,
+                            filename: fileName,
+                            contentType: contentType || undefined,
+                        },
+                    });
+                } else {
+                    throw new NodeOperationError(this.getNode(), `The operation "${operation}" on resource "${resource}" is not supported.`);
+                }
+            } catch (error) {
+                if (this.continueOnFail()) {
+                    returnData.push({ json: { error: (error as Error).message } });
+                } else {
+                    throw new NodeOperationError(this.getNode(), error);
+                }
+            }
+        }
+
+        return [returnData];
     }
 }
 
