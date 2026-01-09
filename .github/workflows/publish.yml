@@ -11,6 +11,8 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,16 +35,22 @@ jobs:
             echo "No tag version found."
             exit 1
           fi
-          npm version --no-git-tag-version "$TAG_VERSION"
+          npm version --no-git-tag-version --allow-same-version "$TAG_VERSION"
 
-      - name: Prepare empty npm config (OIDC only)
-        run: |
-          echo "" > "${{ runner.temp }}/empty-npmrc-user"
-          echo "" > "${{ runner.temp }}/empty-npmrc-global"
+      - name: Build
+        run: npm run build
+
+      - name: Lint (prepublish rules)
+        run: npx eslint -c .eslintrc.prepublish.js nodes credentials package.json
+
       - run: npm test --if-present
-      - run: npm publish --provenance --access public
+
+      - name: Publish (token)
+        if: env.HAS_NPM_TOKEN == 'true'
+        run: npm publish --access public
         env:
-          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/empty-npmrc-user
-          NPM_CONFIG_GLOBALCONFIG: ${{ runner.temp }}/empty-npmrc-global
-          NODE_AUTH_TOKEN: ''
-          NPM_TOKEN: ''
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish (OIDC trusted publishing)
+        if: env.HAS_NPM_TOKEN != 'true'
+        run: npm publish --access public
