@@ -413,26 +413,28 @@ export class Figprint implements INodeType {
                                 qs.file_key = fileKey;
                                 if (frame) qs.frame = frame;
                             } else {
-                                body = { ...payloadObj };
+                                const bodyObj = { ...payloadObj };
                                 if (bodyIsPreviewLike) {
-                                    if (!('fileKey' in body) && !('file_key' in body)) {
-                                        body.fileKey = fileKey;
+                                    if (!('fileKey' in bodyObj) && !('file_key' in bodyObj)) {
+                                        bodyObj.fileKey = fileKey;
                                     }
-                                    if (frame && !('frame' in body)) {
-                                        body.frame = frame;
+                                    if (frame && !('frame' in bodyObj)) {
+                                        bodyObj.frame = frame;
                                     }
-                                    if (missing && missing !== 'keep' && !('missing' in body)) {
-                                        body.missing = missing;
+                                    if (missing && missing !== 'keep' && !('missing' in bodyObj)) {
+                                        bodyObj.missing = missing;
                                     }
                                 } else {
                                     qs.file_key = fileKey;
                                     if (frame) qs.frame = frame;
                                 }
+                                body = bodyObj;
                             }
                         } else {
-                            body = { fileKey };
-                            if (missing && missing !== 'keep') (body as Record<string, unknown>).missing = missing;
-                            if (frame) (body as Record<string, unknown>).frame = frame;
+                            const bodyObj: Record<string, unknown> = { fileKey };
+                            if (missing && missing !== 'keep') bodyObj.missing = missing;
+                            if (frame) bodyObj.frame = frame;
+                            body = bodyObj;
                         }
                     }
 
