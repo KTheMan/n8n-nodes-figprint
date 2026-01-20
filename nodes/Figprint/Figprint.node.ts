@@ -181,7 +181,7 @@ export class Figprint implements INodeType {
                         operation: ['exportFromFileKey'],
                     },
                 },
-                description: 'Optional payload object passed to /api/export',
+                description: 'Optional JSON payload (object, array, etc.) passed to /api/export',
             },
             {
                 displayName: 'Additional Fields',
