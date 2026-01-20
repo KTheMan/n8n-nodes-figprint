@@ -375,7 +375,7 @@ export class Figprint implements INodeType {
                     const hasPayload = payloadParam !== undefined && payloadParam !== null && payloadParam !== '';
                     const isObject = typeof payloadParam === 'object' && !Array.isArray(payloadParam);
                     const payloadObj = isObject ? (payloadParam as Record<string, unknown>) : {};
-                    const bodyIsPreviewLike = hasPayload
+                    const bodyIsPreviewLike = isObject && hasPayload
                         ? [
                                 'fileKey',
                                 'file_key',
@@ -398,32 +398,41 @@ export class Figprint implements INodeType {
                         file_key: requestMethod === 'GET' ? fileKey : undefined,
                     };
 
-                    let body: Record<string, unknown> | undefined;
+                    let body: unknown;
                     let sendJson = false;
 
                     if (requestMethod === 'POST') {
                         sendJson = true;
 
                         if (hasPayload) {
-                            body = { ...payloadObj };
-                            if (bodyIsPreviewLike) {
-                                if (!('fileKey' in body) && !('file_key' in body)) {
-                                    body.fileKey = fileKey;
-                                }
-                                if (frame && !('frame' in body)) {
-                                    body.frame = frame;
-                                }
-                                if (missing && missing !== 'keep' && !('missing' in body)) {
-                                    body.missing = missing;
-                                }
-                            } else {
+                            // If the payload is not an object (e.g., it's an array or primitive),
+                            // send it directly as the body
+                            if (!isObject) {
+                                body = payloadParam;
+                                // Add query params for fileKey and frame since they're not in the body
                                 qs.file_key = fileKey;
                                 if (frame) qs.frame = frame;
+                            } else {
+                                body = { ...payloadObj };
+                                if (bodyIsPreviewLike) {
+                                    if (!('fileKey' in body) && !('file_key' in body)) {
+                                        body.fileKey = fileKey;
+                                    }
+                                    if (frame && !('frame' in body)) {
+                                        body.frame = frame;
+                                    }
+                                    if (missing && missing !== 'keep' && !('missing' in body)) {
+                                        body.missing = missing;
+                                    }
+                                } else {
+                                    qs.file_key = fileKey;
+                                    if (frame) qs.frame = frame;
+                                }
                             }
                         } else {
                             body = { fileKey };
-                            if (missing && missing !== 'keep') body.missing = missing;
-                            if (frame) body.frame = frame;
+                            if (missing && missing !== 'keep') (body as Record<string, unknown>).missing = missing;
+                            if (frame) (body as Record<string, unknown>).frame = frame;
                         }
                     }
 
