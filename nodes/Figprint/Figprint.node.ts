@@ -372,15 +372,9 @@ export class Figprint implements INodeType {
                     const backend = (additionalFields.backend ?? '').toString().trim();
                     const missing = (additionalFields.missing ?? 'keep').toString().trim();
 
-                    if (payloadParam !== null && typeof payloadParam !== 'object') {
-                        throw new NodeOperationError(this.getNode(), 'Payload (JSON) must be an object');
-                    }
-                    if (Array.isArray(payloadParam)) {
-                        throw new NodeOperationError(this.getNode(), 'Payload (JSON) must be an object, not an array');
-                    }
-
-                    const payloadObj = (payloadParam ?? {}) as Record<string, unknown>;
-                    const hasPayload = Object.keys(payloadObj).length > 0;
+                    const hasPayload = payloadParam !== undefined && payloadParam !== null && payloadParam !== '';
+                    const isObject = typeof payloadParam === 'object' && !Array.isArray(payloadParam);
+                    const payloadObj = isObject ? (payloadParam as Record<string, unknown>) : {};
                     const bodyIsPreviewLike = hasPayload
                         ? [
                                 'fileKey',
